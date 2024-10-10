@@ -1,0 +1,54 @@
+# Virtual environment folders (pyenv, virtualenv)
+.venv/
+venv/
+env/
+.python-version
+
+# Ignore pyenv and virtual environment files
+pyenv/
+pip-selfcheck.json
+
+# Known faces - include the folder, but no images
+known_faces/*
+!known_faces/.keep
+
+# SQLite Database file
+*.db
+
+# Python compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Cache and logs
+*.log
+
+# macOS system files
+.DS_Store
+
+# IDE or editor specific files
+.vscode/
+.idea/
+
+
+# Byte-compiled / optimized / DLL files
+*.dll
+*.so
+*.dylib
+
+# Backup files
+*.bak
+*.swp
+*~
+
+# Temporary files or temp folders
+*.tmp
+*.temp
+*.out
+*.lock
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
