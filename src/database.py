@@ -1,5 +1,6 @@
 import sqlite3
 """
+TRIAL
 This is a very simple implementation of an attendance db which has a lot of flaws.
 Currently the database isn't even being used just stored, there's lots of potential here.
 """
