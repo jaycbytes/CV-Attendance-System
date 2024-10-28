@@ -79,10 +79,6 @@ def frame_processing(
             face_locations = face_recognition.face_locations(rgb_frame)
             face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
 
-            face_locations = [(0, 0, 0, 0)]
-            with open(face_encodings_dir, "r") as file:
-                face_encodings = [np.array(json.load(file)["Joe Biden"])]
-
             name = None
 
             # Loop over each face found in the frame to see if it's someone we know
