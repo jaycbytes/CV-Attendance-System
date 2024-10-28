@@ -5,13 +5,14 @@ import warnings
 from database import init_db, mark_attendance
 from face_recognition_module import load_known_faces, frame_processing
 from gui_module import create_gui, update_gui
+from os.path import dirname, join as joinpath
 
 # Ignored this warning because it hasn't affected the program
 warnings.filterwarnings(
     "ignore", message="AVCaptureDeviceTypeExternal is deprecated for Continuity Cameras"
 )
 
-face_images_dir = "../known_faces"
+face_images_dir = joinpath(dirname(__file__), "../known_faces")
 
 
 def main():
