@@ -31,7 +31,6 @@ __pycache__/
 .vscode/
 .idea/
 
-
 # Byte-compiled / optimized / DLL files
 *.dll
 *.so
@@ -52,3 +51,7 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+
+# Face database and images
+data/database.h5
+data/faces/*

@@ -3,6 +3,7 @@ from tkinter import ttk
 from PIL import Image, ImageTk, ImageOps
 import cv2
 import os
+from face_recognition_module import faces_dir
 
 """This file/modules job is to handle everything related to the Tkinter GUI.
 This includes creating our windows and everything that goes inside such as labels.
@@ -33,6 +34,12 @@ def create_gui():
     video_feed_label = ttk.Label(root)
     video_feed_label.pack()
 
+    # Create a new window for the detected faces
+    detected_faces_window = tk.Toplevel(root)
+    detected_faces_window.title("Detected Faces")
+    detected_faces_window.geometry("500x500")
+    detected_faces_window.configure(bg="#ADD8E6")
+
     # Welcome screen window
     welcome_screen = tk.Toplevel(root)
     welcome_screen.title("Welcome Screen!")
@@ -50,7 +57,14 @@ def create_gui():
     face_image_label = ttk.Label(welcome_screen)
     face_image_label.pack(pady=20)  # Adding padding for better layout
 
-    return root, welcome_screen, video_feed_label, welcome_label, face_image_label
+    return (
+        root,
+        welcome_screen,
+        video_feed_label,
+        welcome_label,
+        face_image_label,
+        detected_faces_window,
+    )
 
 
 def welcome_screen_update(face_name, welcome_label, face_image_label, face_images_dir):
@@ -89,6 +103,57 @@ def welcome_screen_update(face_name, welcome_label, face_image_label, face_image
     else:
         # Display text if no image is found
         face_image_label.config(text="No profile image available")
+
+
+def update_image_grid(
+    detected_faces_window,
+):
+    if not hasattr(detected_faces_window, "images"):
+        detected_faces_window.images = []
+
+    images = []
+
+    os.makedirs(faces_dir, exist_ok=True)
+
+    for image_name in os.listdir(faces_dir):
+        image_path = os.path.join(faces_dir, image_name)
+        try:
+            image = Image.open(image_path)
+        except Exception as e:
+            print(f"Error: {e}")
+            continue
+        image = ImageOps.contain(image, (100, 100))
+        image_tk = ImageTk.PhotoImage(image)
+        images.append(image_tk)
+
+    detected_faces_window.images = images
+
+    width = detected_faces_window.winfo_width()
+    height = detected_faces_window.winfo_height()
+    if width <= 1 or height <= 1:
+        detected_faces_window.after(1000, update_image_grid, detected_faces_window)
+        return
+
+    image_size = (100, 100)
+    columns = width // image_size[0]
+
+    if hasattr(detected_faces_window, "image_frame"):
+        detected_faces_window.image_frame.destroy()
+
+    frame = ttk.Frame(detected_faces_window)
+    frame.grid(row=0, column=0)
+    detected_faces_window.image_frame = frame
+
+    image_labels = []
+
+    for i, image in enumerate(images):
+        row = i // columns
+        column = i % columns
+        label = ttk.Label(frame, image=image)
+        label.grid(row=row, column=column)
+        image_labels.append(label)
+
+    detected_faces_window.after(3000, update_image_grid, detected_faces_window)
 
 
 def update_gui(
