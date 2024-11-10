@@ -19,7 +19,7 @@ def create_gui():
     style = ttk.Style()
     style.configure(
         "TLabel",
-        font=("Arial", 20),
+        font=("Helvetica", 20),
         background="#ADD8E6",
     )
     style.configure(
