@@ -21,6 +21,17 @@ def init_db():
                    recent_attendance_date TEXT
                    )''')
     
+    # create a table 'music' to store student's music details
+    cursor.execute('''CREATE TABLE IF NOT EXISTS music
+                   (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   name TEXT,  -- Student's name
+                   song_title TEXT,
+                   artist TEXT,
+                   song_path TEXT, -- File path or URL to the song
+                   FOREIGN KEY(name) REFERENCES attendance(name)
+                   )''')
+    
 
     # Commit changes and close the connection
     conn.commit()
@@ -68,7 +79,9 @@ def mark_attendance(name):
     # add student to db if does not exist alr
     else:
         cursor.execute('''INSERT INTO attendance 
-        (name, streak, total_attendance, recent_attendance_date) 
+        (name, streak, 
+        total_attendance,
+        recent_attendance_date) 
         VALUES (?, 1, 1, ?)
         ''', (name, today))
 
@@ -77,3 +90,25 @@ def mark_attendance(name):
     # Commit changes and close the connection
     conn.commit()
     conn.close()
+
+
+def add_music(name, song_title, artist, song_path):
+    """Add a music entry for a student in the database."""
+    conn = sqlite3.connect('attendance.db')
+    cursor = conn.cursor()
+    
+    # Insert music entry into the 'music' table
+    cursor.execute('''INSERT INTO music (name, song_title, artist, song_path)
+                      VALUES (?, ?, ?, ?)''', (name, song_title, artist, song_path))
+    
+    # Commit and close
+    conn.commit()
+    conn.close()
+
+
+    '''
+    example use:
+    init_db()
+    mark_attendance('Alice')
+    add_music('Alice', 'Song Title', 'Artist Name', '/path/to/song.mp3')
+    '''
