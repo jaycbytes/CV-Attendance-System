@@ -1,10 +1,9 @@
 import PyQt5.QtGui as QtGui
 import PyQt5.QtWidgets as QtWidgets
 import PyQt5.QtCore as QtCore
-from PyQt5.QtWidgets import QSplitter, QWidget, QApplication, QLabel, QVBoxLayout, QHBoxLayout, QTabWidget, QGridLayout, QFormLayout, QLineEdit
+from PyQt5.QtWidgets import QSplitter, QWidget, QApplication, QLabel, QVBoxLayout, QHBoxLayout, QTabWidget, QGridLayout, QFormLayout, QLineEdit, QSizePolicy, QMessageBox, QDialog, QFileDialog
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QThread
-from PyQt5.QtWidgets import QSizePolicy, QMessageBox, QDialog, QFileDialog
 import sys
 import cv2
 import numpy as np
@@ -12,7 +11,7 @@ import queue
 from cv2 import cvtColor, COLOR_BGR2RGB
 from PIL import UnidentifiedImageError, Image, ImageOps, ImageDraw
 import face_recognition
-from face_recognition_module import clustering, height, width, draw_box, dbscan_predict, cluster_embeddings
+from face_recognition_module import clustering, height, width, draw_box, dbscan_predict, cluster_embeddings, initialize_hdf5_file
 import h5py
 from sklearn.cluster import DBSCAN
 from sklearn import decomposition
@@ -60,12 +59,13 @@ def frame_processing(
 
         name = None
 
-        bounds = []
+        bounds.clear()
 
         # Loop over each face found in the frame to see if it's someone we know
         for (top, right, bottom, left), face_encoding in zip(
             face_locations, face_encodings
         ):
+            # Create a small image of just the face
             cropped_face = image.crop((left, top, right, bottom))
             resized_face = cropped_face.resize((width, height))
             face = np.array(resized_face)
@@ -78,8 +78,11 @@ def frame_processing(
                 index = dbscan_predict(clustering, [face_encoding])[0]
 
             try:
-                with open(names_data, "r") as f:
-                    names = json.load(f)
+                if os.path.exists(names_data):
+                    with open(names_data, "r") as f:
+                        names = json.load(f)
+                else:
+                    names = {}
 
                 known_faces = list(names.items())
                 known_face_encodings = [face["embedding"] for _, face in known_faces]
@@ -162,8 +165,13 @@ def cluster_faces(face_queue):
     global clustering
 
     with h5py.File(database_file, "a") as file:
-        images = file["images"]
-        embeddings = file["embeddings"]
+        try:
+            images = file["images"]
+            embeddings = file["embeddings"]
+        except KeyError:
+            print("No images or embeddings found in database")
+            initialize_hdf5_file()
+            return
 
         for face, face_encoding in iter(face_queue.get, None):
             images.resize(images.shape[0] + 1, axis=0)
@@ -204,6 +212,8 @@ class ClusterThread(QThread):
         super().__init__()
         self.face_queue = face_queue
         self._run_flag = True
+
+        initialize_hdf5_file()
 
     def run(self):
         while self._run_flag:
@@ -359,10 +369,10 @@ class FaceDialog(QDialog):
         with open(embeddings_data, 'r') as f:
             embeddings = json.load(f)
 
-        try:
+        if os.path.exists(names_data):
             with open(names_data, 'r') as f:
                 names = json.load(f)
-        except Exception as e:
+        else:
             names = {}
 
         names[name] = {
@@ -421,8 +431,10 @@ class App(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Qt live label demo")
+
         # create the label that holds the image
         self.image_label = QLabel(self)
+        self.image_label.resize(640, 480)
 
         self.tabs = QTabWidget()
         self.welcome_screen = WelcomeScreen()
