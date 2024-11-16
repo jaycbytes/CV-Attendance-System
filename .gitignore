@@ -53,5 +53,4 @@ dist/
 *.egg-info/
 
 # Face database and images
-data/database.h5
-data/faces/*
+data/*
