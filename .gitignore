@@ -3,6 +3,8 @@
 venv/
 env/
 .python-version
+src/trent-test/
+qt-port/
 
 # Ignore pyenv and virtual environment files
 pyenv/
