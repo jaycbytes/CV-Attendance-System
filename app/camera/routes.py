@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, Response, request, jsonify, current_app
 from app.camera.camera import Camera, list_available_cameras
 from app.database.members import create_member, get_member_by_name
+from app.database.attendance import record_attendance
+from app.database.meetings import get_active_meeting
 import os
 import traceback
 from datetime import datetime
@@ -15,7 +17,9 @@ active_camera = None
 @bp.route('/')
 def index():
     """Video streaming home page."""
-    return render_template('camera/index.html')
+    # Get active meeting information
+    active_meeting = get_active_meeting()
+    return render_template('camera/index.html', active_meeting=active_meeting)
 
 @bp.route('/stream')
 def stream():
@@ -93,7 +97,33 @@ def recognition_result():
     if result is None:
         return jsonify({"error": "No recognition results available"}), 404
     
+    # Get active meeting information
+    active_meeting = get_active_meeting()
+    meeting_info = None
+    if active_meeting:
+        meeting_info = {
+            "id": active_meeting["id"],
+            "title": active_meeting["title"],
+            "started": active_meeting["start_time"].strftime('%Y-%m-%d %H:%M')
+        }
+    
+    # Add meeting info to the result
+    result["active_meeting"] = meeting_info
+    
     return jsonify(result)
+
+# Helper function to record attendance for newly enrolled members
+def record_new_member_attendance(member_id):
+    """Record attendance for a newly enrolled member if there's an active meeting."""
+    active_meeting = get_active_meeting()
+    attendance_recorded = False
+    if active_meeting:
+        try:
+            record_attendance(member_id, active_meeting['id'])
+            attendance_recorded = True
+        except Exception as e:
+            print(f"Error recording attendance for new member: {e}")
+    return attendance_recorded
 
 @bp.route('/recognition/enroll', methods=['POST'])
 def enroll_face():
@@ -150,13 +180,17 @@ def enroll_face():
                 active_camera.known_face_names.append(name)
                 active_camera.known_face_ids.append(member_id)
                 
+                # Record attendance for the newly enrolled member
+                attendance_recorded = record_new_member_attendance(member_id)
+                
                 # Force an immediate update of the recognition result
                 active_camera.process_this_frame = True
                 
                 return jsonify({
                     "success": True, 
-                    "message": f"Enrolled {name} successfully", 
-                    "member_id": member_id
+                    "message": f"Enrolled {name} successfully" + (" and recorded attendance" if attendance_recorded else ""), 
+                    "member_id": member_id,
+                    "attendance_recorded": attendance_recorded
                 })
             else:
                 return jsonify({"error": "No face encodings available"}), 400
@@ -189,13 +223,17 @@ def enroll_face():
                 active_camera.known_face_names.append(name)
                 active_camera.known_face_ids.append(member_id)
                 
+                # Record attendance for the newly enrolled member
+                attendance_recorded = record_new_member_attendance(member_id)
+                
                 # Force an immediate update of the recognition result
                 active_camera.process_this_frame = True
                 
                 return jsonify({
                     "success": True, 
-                    "message": f"Enrolled {name} successfully", 
-                    "member_id": member_id
+                    "message": f"Enrolled {name} successfully" + (" and recorded attendance" if attendance_recorded else ""), 
+                    "member_id": member_id,
+                    "attendance_recorded": attendance_recorded
                 })
             except Exception as e:
                 print(f"Face detection error: {e}")

@@ -129,6 +129,19 @@
 <body>
     <h1>Camera Stream</h1>
     
+    {% if active_meeting %}
+    <div style="background-color: #4CAF50; color: white; padding: 10px; margin-bottom: 20px; border-radius: 4px;">
+        <p><strong>Active Meeting:</strong> {{ active_meeting['title'] }}</p>
+        <p>Started: {{ active_meeting['start_time'].strftime('%Y-%m-%d %H:%M') }}</p>
+        <p><a href="/meetings/view/{{ active_meeting['id'] }}" style="color: white; text-decoration: underline;">View Meeting Details</a></p>
+    </div>
+    {% else %}
+    <div style="background-color: #f44336; color: white; padding: 10px; margin-bottom: 20px; border-radius: 4px;">
+        <p>No active meeting. Attendance will not be recorded.</p>
+        <p><a href="/meetings/create" style="color: white; text-decoration: underline;">Start a Meeting</a></p>
+    </div>
+    {% endif %}
+    
     <div id="camera-selector">
         <button id="refresh-cameras">Refresh Camera List</button>
         <select id="camera-select">
@@ -152,6 +165,16 @@
     
     <div id="enroll-form" class="hidden">
         <h3>Enroll New Member</h3>
+        
+        {% if active_meeting %}
+        <div class="alert alert-success">
+            Member will be automatically marked as present for the active meeting: <strong>{{ active_meeting['title'] }}</strong>
+        </div>
+        {% else %}
+        <div class="alert alert-warning">
+            No active meeting. Attendance will not be recorded.
+        </div>
+        {% endif %}
         
         <div class="form-group">
             <label for="person-name">Full Name</label>
@@ -373,7 +396,16 @@
                         
                         // Format and display the result
                         let resultText = `Timestamp: ${new Date(data.timestamp * 1000).toLocaleTimeString()}\n`;
-                        resultText += `Faces detected: ${data.faces.length}\n\n`;
+                        resultText += `Faces detected: ${data.faces.length}\n`;
+                        
+                        // Add active meeting info if available
+                        if (data.active_meeting) {
+                            resultText += `Active Meeting: ${data.active_meeting.title}\n`;
+                        } else {
+                            resultText += `No active meeting (attendance not being recorded)\n`;
+                        }
+                        
+                        resultText += `\n`;
                         
                         if (data.faces.length > 0) {
                             data.faces.forEach((face, index) => {

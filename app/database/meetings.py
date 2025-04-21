@@ -83,15 +83,4 @@ def delete_meeting(meeting_id):
     db.execute('DELETE FROM meetings WHERE id = ?', (meeting_id,))
     db.commit()
 
-def get_meeting_attendance(meeting_id):
-    """Get all attendance records for a specific meeting."""
-    db = get_db()
-    attendees = db.execute(
-        'SELECT m.id, m.name, m.major, m.age, a.timestamp'
-        ' FROM attendance a'
-        ' JOIN members m ON a.member_id = m.id'
-        ' WHERE a.meeting_id = ?'
-        ' ORDER BY a.timestamp',
-        (meeting_id,)
-    ).fetchall()
-    return attendees
+# get_meeting_attendance moved to attendance.py

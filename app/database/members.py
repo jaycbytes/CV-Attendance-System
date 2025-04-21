@@ -94,6 +94,9 @@ def increment_meeting_count(member_id):
 
 def get_all_face_encodings():
     """Get all face encodings and names for recognition."""
+    from app.database import convert_array
+    import pickle
+    
     db = get_db()
     faces = db.execute(
         'SELECT id, name, face_encoding FROM members WHERE face_encoding IS NOT NULL'
@@ -104,8 +107,21 @@ def get_all_face_encodings():
     member_ids = []
     
     for face in faces:
-        encodings.append(face['face_encoding'])
-        names.append(face['name'])
-        member_ids.append(face['id'])
+        try:
+            # Get the face encoding and ensure it's a numpy array
+            encoding = face['face_encoding']
+            
+            # If it's already a numpy array, use it directly
+            # If it's stored as a binary blob, convert it
+            if isinstance(encoding, bytes):
+                encoding = convert_array(encoding)
+                
+            encodings.append(encoding)
+            names.append(face['name'])
+            member_ids.append(face['id'])
+        except Exception as e:
+            print(f"Error processing face encoding for {face['name']}: {e}")
+            # Skip this face if there's an error
+            continue
     
     return encodings, names, member_ids

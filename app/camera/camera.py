@@ -103,22 +103,51 @@ class Camera:
                             # Check if there are known faces to compare against
                             if len(self.known_face_encodings) > 0:
                                 for face_encoding in self.face_encodings:
-                                    # Compare face with known faces
-                                    matches = face_recognition.compare_faces(self.known_face_encodings, face_encoding)
-                                    name = "Unknown"
-                                    member_id = None
-                                    
-                                    # Use the known face with the smallest distance to the new face
-                                    face_distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)
-                                    if len(face_distances) > 0:
-                                        best_match_index = np.argmin(face_distances)
-                                        if matches[best_match_index]:
-                                            name = self.known_face_names[best_match_index]
-                                            # Record member ID for attendance
-                                            if len(self.known_face_ids) > best_match_index:
-                                                member_id = self.known_face_ids[best_match_index]
-                                                if member_id is not None:  # Only record non-None IDs
-                                                    recognized_ids.append(member_id)
+                                    try:
+                                        # Ensure all encodings are numpy arrays with the same shape
+                                        valid_encodings = []
+                                        valid_names = []
+                                        valid_ids = []
+                                        
+                                        for i, known_encoding in enumerate(self.known_face_encodings):
+                                            try:
+                                                # Convert any bytes to numpy arrays if needed
+                                                if isinstance(known_encoding, bytes):
+                                                    from app.database import convert_array
+                                                    known_encoding = convert_array(known_encoding)
+                                                
+                                                # Verify it's a valid numpy array with the right shape
+                                                if (isinstance(known_encoding, np.ndarray) and 
+                                                    known_encoding.dtype == np.float64 and
+                                                    len(known_encoding.shape) == 1):
+                                                    valid_encodings.append(known_encoding)
+                                                    valid_names.append(self.known_face_names[i])
+                                                    valid_ids.append(self.known_face_ids[i] if i < len(self.known_face_ids) else None)
+                                            except Exception as enc_error:
+                                                print(f"Error with encoding {i}: {enc_error}")
+                                                continue
+                                        
+                                        # Default to Unknown
+                                        name = "Unknown"
+                                        member_id = None
+                                        
+                                        # Only proceed if we have valid encodings
+                                        if valid_encodings:
+                                            matches = face_recognition.compare_faces(valid_encodings, face_encoding)
+                                            face_distances = face_recognition.face_distance(valid_encodings, face_encoding)
+                                            
+                                            if len(face_distances) > 0:
+                                                best_match_index = np.argmin(face_distances)
+                                                if matches[best_match_index]:
+                                                    name = valid_names[best_match_index]
+                                                    # Record member ID for attendance
+                                                    member_id = valid_ids[best_match_index]
+                                                    if member_id is not None:
+                                                        recognized_ids.append(member_id)
+                                    except Exception as comp_error:
+                                        print(f"Error comparing faces: {comp_error}")
+                                        name = "Unknown"
+                                        member_id = None
                                     
                                     self.face_names.append(name)
                             else:

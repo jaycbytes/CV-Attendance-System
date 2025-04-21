@@ -5,8 +5,9 @@ from werkzeug.exceptions import abort
 from datetime import datetime
 from app.database.meetings import (
     get_all_meetings, get_meeting, create_meeting, update_meeting, 
-    delete_meeting, end_meeting, get_active_meeting, get_meeting_attendance
+    delete_meeting, end_meeting, get_active_meeting
 )
+from app.database.attendance import get_meeting_attendance
 from app.database.members import get_member
 
 bp = Blueprint('meetings', __name__, url_prefix='/meetings')

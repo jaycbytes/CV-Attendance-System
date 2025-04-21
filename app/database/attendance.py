@@ -57,7 +57,7 @@ def get_meeting_attendance(meeting_id):
     """Get all attendance records for a specific meeting."""
     db = get_db()
     attendance = db.execute(
-        'SELECT a.id, m.name, a.timestamp'
+        'SELECT a.id, m.id as member_id, m.name, m.major, m.age, a.timestamp'
         ' FROM attendance a'
         ' JOIN members m ON a.member_id = m.id'
         ' WHERE a.meeting_id = ?'

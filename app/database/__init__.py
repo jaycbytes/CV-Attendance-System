@@ -9,6 +9,10 @@ import numpy as np
 def get_db():
     """Connect to the application's configured database."""
     if 'db' not in g:
+        # Register adapter and converter for numpy arrays
+        sqlite3.register_adapter(np.ndarray, adapt_array)
+        sqlite3.register_converter("array", convert_array)
+        
         g.db = sqlite3.connect(
             current_app.config['DATABASE'],
             detect_types=sqlite3.PARSE_DECLTYPES
@@ -55,7 +59,17 @@ def init_db_command():
     init_db()
     click.echo('Initialized the database.')
 
+def setup_db_adapters():
+    """Register the adapters for numpy arrays."""
+    sqlite3.register_adapter(np.ndarray, adapt_array)
+    sqlite3.register_converter("array", convert_array)
+    # Apply other configuration as needed
+    print("Database adapters for numpy arrays have been configured.")
+
 def init_app(app):
     """Register database functions with the Flask app."""
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)
+    
+    # Register the adapters on app initialization
+    setup_db_adapters()

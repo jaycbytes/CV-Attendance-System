@@ -8,7 +8,7 @@ CREATE TABLE members (
     major TEXT,
     age INTEGER,
     bio TEXT,
-    face_encoding BLOB,
+    face_encoding array,
     image_path TEXT,
     meeting_count INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
