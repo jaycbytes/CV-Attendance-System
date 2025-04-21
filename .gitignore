@@ -1,0 +1,46 @@
+# Python virtualenv
+venv/
+env/
+ENV/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Flask
+instance/
+.webassets-cache
+
+# Database
+*.sqlite
+*.db
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.flaskenv
+
+# Media files
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.avi
