@@ -8,6 +8,26 @@
             text-align: center;
             margin: 20px;
         }
+        .alert {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
         #video-container {
             margin-top: 20px;
             position: relative;
@@ -90,7 +110,7 @@
     <div id="recognition-controls" class="hidden">
         <button id="toggle-recognition">Enable Face Recognition</button>
         <button id="toggle-show-faces">Show Face Boxes</button>
-        <button id="enroll-button" class="hidden">Enroll Face</button>
+        <button id="enroll-button" class="hidden">Enroll Member</button>
     </div>
     
     <div id="recognition-result" class="hidden">
@@ -394,7 +414,16 @@
             saveFaceBtn.addEventListener('click', function() {
                 const name = personNameInput.value.trim();
                 if (!name) {
-                    alert("Please enter a name");
+                    // Add status message instead of alert
+                    const statusElement = document.createElement('div');
+                    statusElement.className = 'alert alert-warning';
+                    statusElement.textContent = "Please enter a name";
+                    enrollForm.prepend(statusElement);
+                    
+                    // Remove the status after 3 seconds
+                    setTimeout(() => {
+                        statusElement.remove();
+                    }, 3000);
                     return;
                 }
                 
@@ -408,16 +437,53 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
-                        alert(data.error);
+                        // Show error as status message
+                        const statusElement = document.createElement('div');
+                        statusElement.className = 'alert alert-danger';
+                        statusElement.textContent = data.error;
+                        enrollForm.prepend(statusElement);
+                        
+                        // Remove the status after 3 seconds
+                        setTimeout(() => {
+                            statusElement.remove();
+                        }, 3000);
                     } else {
-                        alert(data.message || "Face enrolled successfully");
+                        // Show success as status message in recognition result
+                        const successMsg = data.message || "Member enrolled successfully";
+                        const statusElement = document.createElement('div');
+                        statusElement.className = 'alert alert-success';
+                        statusElement.textContent = successMsg;
+                        recognitionResult.prepend(statusElement);
+                        
+                        // Remove the status after 3 seconds
+                        setTimeout(() => {
+                            statusElement.remove();
+                        }, 3000);
+                        
+                        // Hide form
                         enrollForm.classList.add('hidden');
                         personNameInput.value = '';
+                        
+                        // Force immediate update of the recognition results
+                        updateRecognitionResult();
+                        
+                        // Add timestamp to force refresh of the video stream
+                        const timestamp = new Date().getTime();
+                        cameraStream.src = `/camera/stream?id=${currentCameraId}&show_faces=${showFaces}&t=${timestamp}`;
                     }
                 })
                 .catch(error => {
                     console.error('Error enrolling face:', error);
-                    alert("Error enrolling face: " + error.message);
+                    // Show error as status message
+                    const statusElement = document.createElement('div');
+                    statusElement.className = 'alert alert-danger';
+                    statusElement.textContent = "Error enrolling face: " + error.message;
+                    enrollForm.prepend(statusElement);
+                    
+                    // Remove the status after 5 seconds
+                    setTimeout(() => {
+                        statusElement.remove();
+                    }, 5000);
                 });
             });
             

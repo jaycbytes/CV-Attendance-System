@@ -96,15 +96,15 @@ def enroll_face():
     if active_camera is None:
         return jsonify({"error": "No active camera"}), 400
     
-    # Simple enrollment for testing - in production you'd save this to a database
-    result = active_camera.get_recognition_result()
-    if not result or not result.get('faces'):
-        return jsonify({"error": "No faces detected for enrollment"}), 400
-    
     # Get the name for the face
     name = request.json.get('name')
     if not name:
         return jsonify({"error": "Name is required"}), 400
+    
+    # Simple enrollment for testing - in production you'd save this to a database
+    result = active_camera.get_recognition_result()
+    if not result or not result.get('faces'):
+        return jsonify({"error": "No faces detected for enrollment"}), 400
     
     # Get the current face encoding (just use the first face for simplicity)
     face_location = result['faces'][0]['location']
@@ -119,6 +119,10 @@ def enroll_face():
                 # Add to known faces
                 active_camera.known_face_encodings.append(encoding)
                 active_camera.known_face_names.append(name)
+                active_camera.known_face_ids.append(None)  # Adding None as we don't save to database in this simple example
+                
+                # Force an immediate update of the recognition result
+                active_camera.process_this_frame = True
                 
                 return jsonify({"success": True, "message": f"Enrolled {name} successfully"})
     
