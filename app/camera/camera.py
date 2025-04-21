@@ -3,6 +3,8 @@ import threading
 import time
 import face_recognition
 import numpy as np
+from app.database.members import get_all_face_encodings
+from app.database.attendance import record_attendance
 
 class Camera:
     """Base camera class for accessing webcam or USB cameras with face recognition."""
@@ -25,12 +27,28 @@ class Camera:
         # Known face encodings and names (to be populated)
         self.known_face_encodings = []
         self.known_face_names = []
+        self.known_face_ids = []
         
         # Recognition results
         self.last_recognition_result = None
         
+        # Load known faces from database
+        self.load_known_faces_from_db()
+    
+    def load_known_faces_from_db(self):
+        """Load known face encodings and names from the database."""
+        try:
+            encodings, names, member_ids = get_all_face_encodings()
+            self.known_face_encodings = encodings
+            self.known_face_names = names
+            self.known_face_ids = member_ids
+            return True
+        except Exception as e:
+            print(f"Error loading faces from database: {e}")
+            return False
+        
     def load_known_faces(self, face_encodings, face_names):
-        """Load known face encodings and names."""
+        """Load known face encodings and names manually."""
         self.known_face_encodings = face_encodings
         self.known_face_names = face_names
         
@@ -78,6 +96,7 @@ class Camera:
                     
                     # Reset face names for this frame
                     self.face_names = []
+                    recognized_ids = []
                     
                     # Check if there are known faces to compare against
                     if len(self.known_face_encodings) > 0:
@@ -85,6 +104,7 @@ class Camera:
                             # Compare face with known faces
                             matches = face_recognition.compare_faces(self.known_face_encodings, face_encoding)
                             name = "Unknown"
+                            member_id = None
                             
                             # Use the known face with the smallest distance to the new face
                             face_distances = face_recognition.face_distance(self.known_face_encodings, face_encoding)
@@ -92,11 +112,22 @@ class Camera:
                                 best_match_index = np.argmin(face_distances)
                                 if matches[best_match_index]:
                                     name = self.known_face_names[best_match_index]
+                                    # Record member ID for attendance
+                                    if len(self.known_face_ids) > best_match_index:
+                                        member_id = self.known_face_ids[best_match_index]
+                                        recognized_ids.append(member_id)
                             
                             self.face_names.append(name)
                     else:
                         # If no known faces are loaded, just mark all faces as unknown
                         self.face_names = ["Unknown"] * len(self.face_locations)
+                    
+                    # Record attendance for recognized members
+                    for member_id in recognized_ids:
+                        try:
+                            record_attendance(member_id)
+                        except Exception as e:
+                            print(f"Error recording attendance: {e}")
                         
                     # Store the recognition result
                     if len(self.face_names) > 0:
@@ -106,6 +137,7 @@ class Camera:
                                 {
                                     "name": name,
                                     "location": location,
+                                    "member_id": self.known_face_ids[self.known_face_names.index(name)] if name != "Unknown" and name in self.known_face_names else None
                                 }
                                 for name, location in zip(self.face_names, self.face_locations)
                             ]
@@ -170,6 +202,11 @@ class Camera:
             self.recognition_enabled = enabled
         else:
             self.recognition_enabled = not self.recognition_enabled
+            
+        # If enabling recognition, reload faces from the database
+        if self.recognition_enabled:
+            self.load_known_faces_from_db()
+            
         return self.recognition_enabled
     
     def get_camera_properties(self):

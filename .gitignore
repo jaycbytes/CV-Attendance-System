@@ -29,6 +29,7 @@ instance/
 
 # Database
 *.sqlite
+*.sqlite3
 *.db
 
 # Logs
@@ -44,3 +45,15 @@ instance/
 *.png
 *.mp4
 *.avi
+*.gif
+
+# Face recognition
+*.pickle
+face_encodings/
+
+# Member images
+member_images/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
