@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}Meetings - Attendance AI{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Meetings</h2>
+            <a href="{{ url_for('meetings.create') }}" class="btn btn-primary">Start New Meeting</a>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if meetings %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Description</th>
+                    <th>Start Time</th>
+                    <th>End Time</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for meeting in meetings %}
+                <tr>
+                    <td>{{ meeting['title'] }}</td>
+                    <td>{{ meeting['description']|truncate(50) if meeting['description'] else '' }}</td>
+                    <td>{{ meeting['start_time'].strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ meeting['end_time'].strftime('%Y-%m-%d %H:%M') if meeting['end_time'] else 'Ongoing' }}</td>
+                    <td>
+                        {% if meeting['end_time'] %}
+                        <span class="badge" style="background-color: #6c757d; color: white;">Ended</span>
+                        {% else %}
+                        <span class="badge" style="background-color: #28a745; color: white;">Active</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('meetings.view', id=meeting['id']) }}" class="btn btn-sm btn-secondary">View</a>
+                        <a href="{{ url_for('meetings.edit', id=meeting['id']) }}" class="btn btn-sm btn-primary">Edit</a>
+                        {% if not meeting['end_time'] %}
+                        <form action="{{ url_for('meetings.end', id=meeting['id']) }}" method="post" style="display: inline;">
+                            <button type="submit" class="btn btn-sm btn-warning">End</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No meetings found. Create your first meeting to get started with attendance tracking.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

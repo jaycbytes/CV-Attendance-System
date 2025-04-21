@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block title %}Start New Meeting - Attendance AI{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>Start New Meeting</h2>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            <div class="form-group">
+                <label for="title">Meeting Title</label>
+                <input type="text" name="title" id="title" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea name="description" id="description" class="form-control" rows="3"></textarea>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <button type="submit" class="btn btn-primary">Start Meeting</button>
+                <a href="{{ url_for('meetings.list') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

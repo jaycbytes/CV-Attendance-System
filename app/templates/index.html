@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - Attendance AI{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        Welcome to Attendance AI
+    </div>
+    <div class="card-body">
+        <h2>Club Meeting Attendance System</h2>
+        <p>This system uses computer vision and face recognition to track attendance for your club meetings.</p>
+        
+        {% if active_meeting %}
+        <div class="alert alert-info">
+            <h3>Active Meeting: {{ active_meeting['title'] }}</h3>
+            <p>Started at: {{ active_meeting['start_time'].strftime('%Y-%m-%d %H:%M:%S') }}</p>
+            <p>{{ active_meeting['description'] }}</p>
+            <a href="{{ url_for('meetings.view', id=active_meeting['id']) }}" class="btn btn-primary">View Meeting</a>
+        </div>
+        {% else %}
+        <div class="alert alert-secondary">
+            <h3>No Active Meeting</h3>
+            <p>Start a new meeting to begin tracking attendance.</p>
+            <a href="{{ url_for('meetings.create') }}" class="btn btn-primary">Start New Meeting</a>
+        </div>
+        {% endif %}
+        
+        <div class="dashboard-stats">
+            <div class="stat-card">
+                <div class="stat-label">Total Members</div>
+                <div class="stat-number">{{ member_count }}</div>
+                <a href="{{ url_for('members.list') }}" class="btn btn-sm btn-secondary">View All</a>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Camera</div>
+                <div class="stat-number"><i class="fas fa-camera"></i></div>
+                <a href="{{ url_for('camera.index') }}" class="btn btn-sm btn-secondary">Launch Camera</a>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Admin</div>
+                <div class="stat-number"><i class="fas fa-tools"></i></div>
+                <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-secondary">Dashboard</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

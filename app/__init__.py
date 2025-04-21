@@ -1,5 +1,5 @@
 import os
-from flask import Flask
+from flask import Flask, render_template
 
 def create_app(test_config=None):
     # Create and configure the app
@@ -7,7 +7,7 @@ def create_app(test_config=None):
     app.config.from_mapping(
         SECRET_KEY='dev',
         DATABASE=os.path.join(app.instance_path, 'attendance.sqlite'),
-        UPLOAD_FOLDER=os.path.join(app.instance_path, 'member_images'),
+        UPLOAD_FOLDER=os.path.join(app.static_folder, 'member_images'),
     )
 
     if test_config is None:
@@ -31,5 +31,18 @@ def create_app(test_config=None):
     # Register blueprints
     from app.camera import routes as camera_routes
     app.register_blueprint(camera_routes.bp)
+    
+    from app.routes import members, meetings, admin, main
+    app.register_blueprint(members.bp)
+    app.register_blueprint(meetings.bp)
+    app.register_blueprint(admin.bp)
+    app.register_blueprint(main.bp)
+    
+    # Make url_for('index') work
+    app.add_url_rule('/', endpoint='index')
+    
+    @app.errorhandler(404)
+    def page_not_found(e):
+        return render_template('404.html'), 404
     
     return app
