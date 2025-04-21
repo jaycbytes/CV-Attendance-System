@@ -10,6 +10,10 @@
         }
         #video-container {
             margin-top: 20px;
+            position: relative;
+            width: 640px;
+            height: 480px;
+            margin: 20px auto;
         }
         img {
             max-width: 100%;
@@ -32,7 +36,7 @@
             border-radius: 5px;
         }
         .hidden {
-            display: none;
+            display: none !important;
         }
         #enroll-form {
             margin: 20px auto;
@@ -47,6 +51,27 @@
             margin: 10px 0;
             width: 80%;
         }
+        .placeholder-image {
+            width: 100%;
+            height: 100%;
+            background-color: #eee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #ddd;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+        #camera-stream {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
     </style>
 </head>
 <body>
@@ -57,12 +82,12 @@
         <select id="camera-select">
             <option value="0">Default Camera</option>
         </select>
-        <button id="switch-camera">Switch Camera</button>
+        <button id="camera-toggle">Start Camera</button>
     </div>
     
     <div id="camera-info"></div>
     
-    <div id="recognition-controls">
+    <div id="recognition-controls" class="hidden">
         <button id="toggle-recognition">Enable Face Recognition</button>
         <button id="toggle-show-faces">Show Face Boxes</button>
         <button id="enroll-button" class="hidden">Enroll Face</button>
@@ -82,17 +107,22 @@
     </div>
     
     <div id="video-container">
-        <img id="camera-stream" src="{{ url_for('camera.stream') }}" alt="Camera Stream">
+        <div id="camera-placeholder" class="placeholder-image">
+            <p>Camera is not active. Click "Start Camera" to begin.</p>
+        </div>
+        <img id="camera-stream" src="" alt="Camera Stream" class="hidden">
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Camera elements
             const cameraSelect = document.getElementById('camera-select');
-            const switchBtn = document.getElementById('switch-camera');
+            const cameraToggle = document.getElementById('camera-toggle');
             const refreshBtn = document.getElementById('refresh-cameras');
             const cameraStream = document.getElementById('camera-stream');
+            const cameraPlaceholder = document.getElementById('camera-placeholder');
             const cameraInfo = document.getElementById('camera-info');
+            const recognitionControls = document.getElementById('recognition-controls');
             
             // Recognition elements
             const toggleRecognitionBtn = document.getElementById('toggle-recognition');
@@ -110,6 +140,7 @@
             let showFaces = false;
             let currentCameraId = 0;
             let resultUpdateInterval = null;
+            let cameraActive = false;
             
             // Function to load camera list
             function loadCameraList() {
@@ -137,6 +168,91 @@
                     .catch(error => {
                         console.error('Error loading camera list:', error);
                     });
+            }
+            
+            // Function to check if camera is active
+            function checkCameraStatus() {
+                fetch('/camera/status')
+                    .then(response => response.json())
+                    .then(data => {
+                        updateCameraUI(data.active);
+                    })
+                    .catch(error => {
+                        console.error('Error checking camera status:', error);
+                    });
+            }
+            
+            // Function to update camera UI based on status
+            function updateCameraUI(active) {
+                cameraActive = active;
+                cameraToggle.textContent = active ? 'Stop Camera' : 'Start Camera';
+                
+                if (active) {
+                    // Show camera stream and controls
+                    cameraPlaceholder.classList.add('hidden');
+                    cameraStream.classList.remove('hidden');
+                    recognitionControls.classList.remove('hidden');
+                    
+                    // Load camera info
+                    loadCameraInfo();
+                } else {
+                    // Hide camera stream and controls
+                    cameraPlaceholder.classList.remove('hidden');
+                    cameraStream.classList.add('hidden');
+                    recognitionControls.classList.add('hidden');
+                    recognitionResult.classList.add('hidden');
+                    enrollButton.classList.add('hidden');
+                    enrollForm.classList.add('hidden');
+                    
+                    // Clear intervals
+                    if (resultUpdateInterval) {
+                        clearInterval(resultUpdateInterval);
+                        resultUpdateInterval = null;
+                    }
+                    
+                    // Reset recognition state
+                    recognitionEnabled = false;
+                }
+            }
+            
+            // Function to start camera
+            function startCamera() {
+                const cameraId = parseInt(cameraSelect.value);
+                
+                fetch('/camera/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ id: cameraId }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        currentCameraId = cameraId;
+                        cameraStream.src = `/camera/stream?id=${cameraId}&show_faces=false`;
+                        updateCameraUI(true);
+                    } else {
+                        alert('Error starting camera: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error starting camera:', error);
+                });
+            }
+            
+            // Function to stop camera
+            function stopCamera() {
+                fetch('/camera/stop', {
+                    method: 'POST',
+                })
+                .then(response => response.json())
+                .then(data => {
+                    updateCameraUI(false);
+                })
+                .catch(error => {
+                    console.error('Error stopping camera:', error);
+                });
             }
             
             // Function to load camera info
@@ -229,6 +345,15 @@
                 }
             }
             
+            // Toggle camera
+            cameraToggle.addEventListener('click', function() {
+                if (cameraActive) {
+                    stopCamera();
+                } else {
+                    startCamera();
+                }
+            });
+            
             // Toggle face recognition
             toggleRecognitionBtn.addEventListener('click', function() {
                 fetch('/camera/recognition/toggle', {
@@ -256,17 +381,6 @@
                 
                 // Update the stream URL
                 cameraStream.src = `/camera/stream?id=${currentCameraId}&show_faces=${showFaces}`;
-            });
-            
-            // Switch camera
-            switchBtn.addEventListener('click', function() {
-                currentCameraId = parseInt(cameraSelect.value);
-                
-                // Update the stream URL with the current show_faces setting
-                cameraStream.src = `/camera/stream?id=${currentCameraId}&show_faces=${showFaces}`;
-                
-                // Load camera info after a short delay to allow the camera to initialize
-                setTimeout(loadCameraInfo, 1000);
             });
             
             // Refresh camera list
@@ -314,7 +428,7 @@
             
             // Load cameras on page load
             loadCameraList();
-            setTimeout(loadCameraInfo, 1000);
+            checkCameraStatus();
         });
     </script>
 </body>

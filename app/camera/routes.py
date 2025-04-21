@@ -16,7 +16,7 @@ def stream():
     """Video streaming route."""
     global active_camera
     camera_id = request.args.get('id', default=0, type=int)
-    show_faces = request.args.get('show_faces', default=False, type=bool)
+    show_faces = request.args.get('show_faces', default='false', type=str).lower() == 'true'
     
     # Initialize camera if not active or different camera selected
     if active_camera is None or active_camera.camera_id != camera_id:
@@ -30,6 +30,34 @@ def stream():
     
     return Response(generate_frames(active_camera, show_faces),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@bp.route('/stop', methods=['POST'])
+def stop_camera():
+    """Stop the active camera."""
+    global active_camera
+    if active_camera:
+        active_camera.stop()
+        active_camera = None
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "No active camera"})
+
+@bp.route('/start', methods=['POST'])
+def start_camera():
+    """Start a camera with the given ID."""
+    global active_camera
+    camera_id = request.json.get('id', 0)
+    
+    # Stop current camera if active
+    if active_camera:
+        active_camera.stop()
+    
+    # Start new camera
+    try:
+        active_camera = Camera(camera_id=camera_id, recognition_enabled=False)
+        active_camera.start()
+        return jsonify({"success": True})
+    except RuntimeError as e:
+        return jsonify({"success": False, "error": str(e)})
 
 @bp.route('/recognition/toggle', methods=['POST'])
 def toggle_recognition():
@@ -110,6 +138,12 @@ def camera_info():
         return jsonify({"error": "No active camera"})
     
     return jsonify(active_camera.get_camera_properties())
+
+@bp.route('/status')
+def camera_status():
+    """Check if camera is active."""
+    global active_camera
+    return jsonify({"active": active_camera is not None})
 
 def generate_frames(camera, show_faces=False):
     """Generate frames from the camera."""
