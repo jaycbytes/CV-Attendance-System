@@ -15,12 +15,307 @@
             max-width: 100%;
             border: 1px solid #ddd;
         }
+        #camera-selector, #recognition-controls {
+            margin: 20px 0;
+        }
+        button {
+            padding: 8px 12px;
+            margin: 0 5px;
+            cursor: pointer;
+        }
+        #recognition-result {
+            margin: 20px auto;
+            max-width: 600px;
+            padding: 10px;
+            text-align: left;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        .hidden {
+            display: none;
+        }
+        #enroll-form {
+            margin: 20px auto;
+            max-width: 400px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        #enroll-form input {
+            padding: 8px;
+            margin: 10px 0;
+            width: 80%;
+        }
     </style>
 </head>
 <body>
     <h1>Camera Stream</h1>
-    <div id="video-container">
-        <img src="{{ url_for('camera.stream') }}" alt="Camera Stream">
+    
+    <div id="camera-selector">
+        <button id="refresh-cameras">Refresh Camera List</button>
+        <select id="camera-select">
+            <option value="0">Default Camera</option>
+        </select>
+        <button id="switch-camera">Switch Camera</button>
     </div>
+    
+    <div id="camera-info"></div>
+    
+    <div id="recognition-controls">
+        <button id="toggle-recognition">Enable Face Recognition</button>
+        <button id="toggle-show-faces">Show Face Boxes</button>
+        <button id="enroll-button" class="hidden">Enroll Face</button>
+    </div>
+    
+    <div id="recognition-result" class="hidden">
+        <h3>Recognition Results</h3>
+        <pre id="result-data">No faces detected</pre>
+    </div>
+    
+    <div id="enroll-form" class="hidden">
+        <h3>Enroll New Face</h3>
+        <p>Enter name for the detected face:</p>
+        <input type="text" id="person-name" placeholder="Name">
+        <button id="save-face">Save</button>
+        <button id="cancel-enroll">Cancel</button>
+    </div>
+    
+    <div id="video-container">
+        <img id="camera-stream" src="{{ url_for('camera.stream') }}" alt="Camera Stream">
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Camera elements
+            const cameraSelect = document.getElementById('camera-select');
+            const switchBtn = document.getElementById('switch-camera');
+            const refreshBtn = document.getElementById('refresh-cameras');
+            const cameraStream = document.getElementById('camera-stream');
+            const cameraInfo = document.getElementById('camera-info');
+            
+            // Recognition elements
+            const toggleRecognitionBtn = document.getElementById('toggle-recognition');
+            const toggleShowFacesBtn = document.getElementById('toggle-show-faces');
+            const recognitionResult = document.getElementById('recognition-result');
+            const resultData = document.getElementById('result-data');
+            const enrollButton = document.getElementById('enroll-button');
+            const enrollForm = document.getElementById('enroll-form');
+            const personNameInput = document.getElementById('person-name');
+            const saveFaceBtn = document.getElementById('save-face');
+            const cancelEnrollBtn = document.getElementById('cancel-enroll');
+            
+            // State variables
+            let recognitionEnabled = false;
+            let showFaces = false;
+            let currentCameraId = 0;
+            let resultUpdateInterval = null;
+            
+            // Function to load camera list
+            function loadCameraList() {
+                fetch('/camera/list')
+                    .then(response => response.json())
+                    .then(data => {
+                        // Clear current options
+                        cameraSelect.innerHTML = '';
+                        
+                        // Add detected cameras
+                        data.cameras.forEach(cameraId => {
+                            const option = document.createElement('option');
+                            option.value = cameraId;
+                            option.textContent = `Camera ${cameraId}`;
+                            cameraSelect.appendChild(option);
+                        });
+                        
+                        if (data.cameras.length === 0) {
+                            const option = document.createElement('option');
+                            option.value = "0";
+                            option.textContent = "Default Camera";
+                            cameraSelect.appendChild(option);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading camera list:', error);
+                    });
+            }
+            
+            // Function to load camera info
+            function loadCameraInfo() {
+                fetch('/camera/info')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            cameraInfo.textContent = data.error;
+                            return;
+                        }
+                        
+                        cameraInfo.innerHTML = `
+                            <p>Camera ID: ${data.id} | Resolution: ${data.width}x${data.height} | FPS: ${data.fps.toFixed(1)}</p>
+                        `;
+                        
+                        // Update recognition state based on camera info
+                        recognitionEnabled = data.recognition_enabled;
+                        updateRecognitionUI();
+                    })
+                    .catch(error => {
+                        console.error('Error loading camera info:', error);
+                    });
+            }
+            
+            // Function to update recognition result
+            function updateRecognitionResult() {
+                if (!recognitionEnabled) return;
+                
+                fetch('/camera/recognition/result')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.error) {
+                            resultData.textContent = data.error;
+                            return;
+                        }
+                        
+                        // Format and display the result
+                        let resultText = `Timestamp: ${new Date(data.timestamp * 1000).toLocaleTimeString()}\n`;
+                        resultText += `Faces detected: ${data.faces.length}\n\n`;
+                        
+                        if (data.faces.length > 0) {
+                            data.faces.forEach((face, index) => {
+                                resultText += `Face ${index + 1}: ${face.name}\n`;
+                            });
+                            
+                            // Show enroll button if any unknown faces
+                            const hasUnknown = data.faces.some(face => face.name === "Unknown");
+                            enrollButton.classList.toggle('hidden', !hasUnknown);
+                        } else {
+                            resultText += "No faces detected";
+                            enrollButton.classList.add('hidden');
+                        }
+                        
+                        resultData.textContent = resultText;
+                    })
+                    .catch(error => {
+                        console.error('Error updating recognition result:', error);
+                        resultData.textContent = `Error: ${error.message}`;
+                    });
+            }
+            
+            // Function to update UI based on recognition state
+            function updateRecognitionUI() {
+                toggleRecognitionBtn.textContent = recognitionEnabled ? 
+                    'Disable Face Recognition' : 'Enable Face Recognition';
+                
+                if (recognitionEnabled) {
+                    recognitionResult.classList.remove('hidden');
+                    toggleShowFacesBtn.classList.remove('hidden');
+                    // Start periodic result updates
+                    if (!resultUpdateInterval) {
+                        resultUpdateInterval = setInterval(updateRecognitionResult, 1000);
+                        updateRecognitionResult();
+                    }
+                } else {
+                    recognitionResult.classList.add('hidden');
+                    toggleShowFacesBtn.classList.add('hidden');
+                    enrollButton.classList.add('hidden');
+                    // Stop periodic updates
+                    if (resultUpdateInterval) {
+                        clearInterval(resultUpdateInterval);
+                        resultUpdateInterval = null;
+                    }
+                }
+            }
+            
+            // Toggle face recognition
+            toggleRecognitionBtn.addEventListener('click', function() {
+                fetch('/camera/recognition/toggle', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ enabled: !recognitionEnabled }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    recognitionEnabled = data.recognition_enabled;
+                    updateRecognitionUI();
+                })
+                .catch(error => {
+                    console.error('Error toggling recognition:', error);
+                });
+            });
+            
+            // Toggle showing face boxes
+            toggleShowFacesBtn.addEventListener('click', function() {
+                showFaces = !showFaces;
+                toggleShowFacesBtn.textContent = showFaces ? 
+                    'Hide Face Boxes' : 'Show Face Boxes';
+                
+                // Update the stream URL
+                cameraStream.src = `/camera/stream?id=${currentCameraId}&show_faces=${showFaces}`;
+            });
+            
+            // Switch camera
+            switchBtn.addEventListener('click', function() {
+                currentCameraId = parseInt(cameraSelect.value);
+                
+                // Update the stream URL with the current show_faces setting
+                cameraStream.src = `/camera/stream?id=${currentCameraId}&show_faces=${showFaces}`;
+                
+                // Load camera info after a short delay to allow the camera to initialize
+                setTimeout(loadCameraInfo, 1000);
+            });
+            
+            // Refresh camera list
+            refreshBtn.addEventListener('click', loadCameraList);
+            
+            // Handle face enrollment
+            enrollButton.addEventListener('click', function() {
+                enrollForm.classList.remove('hidden');
+            });
+            
+            saveFaceBtn.addEventListener('click', function() {
+                const name = personNameInput.value.trim();
+                if (!name) {
+                    alert("Please enter a name");
+                    return;
+                }
+                
+                fetch('/camera/recognition/enroll', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name: name }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        alert(data.message || "Face enrolled successfully");
+                        enrollForm.classList.add('hidden');
+                        personNameInput.value = '';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error enrolling face:', error);
+                    alert("Error enrolling face: " + error.message);
+                });
+            });
+            
+            cancelEnrollBtn.addEventListener('click', function() {
+                enrollForm.classList.add('hidden');
+                personNameInput.value = '';
+            });
+            
+            // Load cameras on page load
+            loadCameraList();
+            setTimeout(loadCameraInfo, 1000);
+        });
+    </script>
 </body>
 </html>
