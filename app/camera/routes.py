@@ -1,5 +1,11 @@
-from flask import Blueprint, render_template, Response, request, jsonify
+from flask import Blueprint, render_template, Response, request, jsonify, current_app
 from app.camera.camera import Camera, list_available_cameras
+from app.database.members import create_member, get_member_by_name
+import os
+import traceback
+from datetime import datetime
+import cv2
+import face_recognition
 
 bp = Blueprint('camera', __name__, url_prefix='/camera')
 
@@ -96,37 +102,109 @@ def enroll_face():
     if active_camera is None:
         return jsonify({"error": "No active camera"}), 400
     
-    # Get the name for the face
-    name = request.json.get('name')
+    # Get all required data for member creation
+    data = request.json
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+        
+    name = data.get('name')
+    major = data.get('major', None)
+    age = data.get('age', None)
+    bio = data.get('bio', None)
+    
     if not name:
         return jsonify({"error": "Name is required"}), 400
     
-    # Simple enrollment for testing - in production you'd save this to a database
-    result = active_camera.get_recognition_result()
-    if not result or not result.get('faces'):
-        return jsonify({"error": "No faces detected for enrollment"}), 400
+    # Check if we already have a member with this name
+    existing_member = get_member_by_name(name)
+    if existing_member:
+        return jsonify({"error": f"A member named '{name}' already exists. Please use a different name."}), 400
     
-    # Get the current face encoding (just use the first face for simplicity)
-    face_location = result['faces'][0]['location']
-    
-    # We need to capture the encoding from the current frame
-    if active_camera.face_encodings and active_camera.face_locations:
-        # Find the matching encoding based on location
-        for i, loc in enumerate(active_camera.face_locations):
-            if loc == face_location:
-                encoding = active_camera.face_encodings[i]
+    try:
+        # Check if we have a frame
+        if active_camera.frame is None:
+            return jsonify({"error": "No camera frame available"}), 400
+        
+        # Create a copy of the current frame
+        frame = active_camera.frame.copy()
+        
+        # Generate a unique filename using timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{name.replace(' ', '_').lower()}_{timestamp}.jpg"
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        
+        # Save the image
+        cv2.imwrite(filepath, frame)
+        
+        # Get face encoding from the current frame
+        if active_camera.face_encodings and active_camera.face_locations:
+            # Use the first detected face (assuming it's the person being enrolled)
+            if len(active_camera.face_encodings) > 0:
+                encoding = active_camera.face_encodings[0]
                 
-                # Add to known faces
+                # Save to database and get member ID
+                member_id = create_member(name, major, age, bio, encoding, filename)
+                
+                # Add to known faces in memory for immediate recognition
                 active_camera.known_face_encodings.append(encoding)
                 active_camera.known_face_names.append(name)
-                active_camera.known_face_ids.append(None)  # Adding None as we don't save to database in this simple example
+                active_camera.known_face_ids.append(member_id)
                 
                 # Force an immediate update of the recognition result
                 active_camera.process_this_frame = True
                 
-                return jsonify({"success": True, "message": f"Enrolled {name} successfully"})
-    
-    return jsonify({"error": "Could not enroll face"}), 400
+                return jsonify({
+                    "success": True, 
+                    "message": f"Enrolled {name} successfully", 
+                    "member_id": member_id
+                })
+            else:
+                return jsonify({"error": "No face encodings available"}), 400
+        else:
+            # If no face detected, try to detect one from the saved image
+            try:
+                small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+                rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+                
+                # Find faces in the current frame
+                face_locations = face_recognition.face_locations(rgb_small_frame, model="hog")
+                
+                if not face_locations:
+                    return jsonify({"error": "No faces detected in the current frame"}), 400
+                
+                # Get face encodings
+                face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+                
+                if not face_encodings:
+                    return jsonify({"error": "Could not generate face encoding"}), 400
+                
+                # Use the first face encoding (assuming it's the person being enrolled)
+                encoding = face_encodings[0]
+                
+                # Save to database and get member ID
+                member_id = create_member(name, major, age, bio, encoding, filename)
+                
+                # Add to known faces in memory for immediate recognition
+                active_camera.known_face_encodings.append(encoding)
+                active_camera.known_face_names.append(name)
+                active_camera.known_face_ids.append(member_id)
+                
+                # Force an immediate update of the recognition result
+                active_camera.process_this_frame = True
+                
+                return jsonify({
+                    "success": True, 
+                    "message": f"Enrolled {name} successfully", 
+                    "member_id": member_id
+                })
+            except Exception as e:
+                print(f"Face detection error: {e}")
+                traceback.print_exc()
+                return jsonify({"error": f"Error processing face: {str(e)}"}), 500
+    except Exception as e:
+        print(f"Error in enroll_face: {e}")
+        traceback.print_exc()
+        return jsonify({"error": f"Enrollment failed: {str(e)}"}), 500
 
 @bp.route('/list')
 def camera_list():

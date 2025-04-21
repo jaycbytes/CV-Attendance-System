@@ -66,10 +66,42 @@
             border-radius: 5px;
             background-color: #f9f9f9;
         }
-        #enroll-form input {
+        .form-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-control {
+            width: 100%;
             padding: 8px;
-            margin: 10px 0;
-            width: 80%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .form-buttons {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .btn-primary {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-secondary {
+            background-color: #f1f1f1;
+            color: #333;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
         }
         .placeholder-image {
             width: 100%;
@@ -119,11 +151,32 @@
     </div>
     
     <div id="enroll-form" class="hidden">
-        <h3>Enroll New Face</h3>
-        <p>Enter name for the detected face:</p>
-        <input type="text" id="person-name" placeholder="Name">
-        <button id="save-face">Save</button>
-        <button id="cancel-enroll">Cancel</button>
+        <h3>Enroll New Member</h3>
+        
+        <div class="form-group">
+            <label for="person-name">Full Name</label>
+            <input type="text" id="person-name" placeholder="Full Name" class="form-control" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="person-major">Major</label>
+            <input type="text" id="person-major" placeholder="Major" class="form-control">
+        </div>
+        
+        <div class="form-group">
+            <label for="person-age">Age</label>
+            <input type="number" id="person-age" placeholder="Age" class="form-control" min="1" max="120">
+        </div>
+        
+        <div class="form-group">
+            <label for="person-bio">Bio</label>
+            <textarea id="person-bio" placeholder="Brief bio" class="form-control" rows="3"></textarea>
+        </div>
+        
+        <div class="form-buttons">
+            <button id="save-face" class="btn-primary">Save Member</button>
+            <button id="cancel-enroll" class="btn-secondary">Cancel</button>
+        </div>
     </div>
     
     <div id="video-container">
@@ -152,6 +205,9 @@
             const enrollButton = document.getElementById('enroll-button');
             const enrollForm = document.getElementById('enroll-form');
             const personNameInput = document.getElementById('person-name');
+            const personMajorInput = document.getElementById('person-major');
+            const personAgeInput = document.getElementById('person-age');
+            const personBioInput = document.getElementById('person-bio');
             const saveFaceBtn = document.getElementById('save-face');
             const cancelEnrollBtn = document.getElementById('cancel-enroll');
             
@@ -413,6 +469,10 @@
             
             saveFaceBtn.addEventListener('click', function() {
                 const name = personNameInput.value.trim();
+                const major = personMajorInput.value.trim();
+                const age = personAgeInput.value ? parseInt(personAgeInput.value) : null;
+                const bio = personBioInput.value.trim();
+                
                 if (!name) {
                     // Add status message instead of alert
                     const statusElement = document.createElement('div');
@@ -427,12 +487,21 @@
                     return;
                 }
                 
+                // Show processing indicator
+                saveFaceBtn.textContent = "Saving...";
+                saveFaceBtn.disabled = true;
+                
                 fetch('/camera/recognition/enroll', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ name: name }),
+                    body: JSON.stringify({ 
+                        name: name,
+                        major: major || null,
+                        age: age,
+                        bio: bio || null
+                    }),
                 })
                 .then(response => response.json())
                 .then(data => {
@@ -460,9 +529,16 @@
                             statusElement.remove();
                         }, 3000);
                         
-                        // Hide form
+                        // Hide form and reset fields
                         enrollForm.classList.add('hidden');
                         personNameInput.value = '';
+                        personMajorInput.value = '';
+                        personAgeInput.value = '';
+                        personBioInput.value = '';
+                        
+                        // Reset button
+                        saveFaceBtn.textContent = "Save Member";
+                        saveFaceBtn.disabled = false;
                         
                         // Force immediate update of the recognition results
                         updateRecognitionResult();
@@ -484,12 +560,23 @@
                     setTimeout(() => {
                         statusElement.remove();
                     }, 5000);
+                    
+                    // Reset button
+                    saveFaceBtn.textContent = "Save Member";
+                    saveFaceBtn.disabled = false;
                 });
             });
             
             cancelEnrollBtn.addEventListener('click', function() {
                 enrollForm.classList.add('hidden');
                 personNameInput.value = '';
+                personMajorInput.value = '';
+                personAgeInput.value = '';
+                personBioInput.value = '';
+                
+                // Reset button if it was in saving state
+                saveFaceBtn.textContent = "Save Member";
+                saveFaceBtn.disabled = false;
             });
             
             // Load cameras on page load
