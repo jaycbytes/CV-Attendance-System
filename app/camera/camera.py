@@ -23,7 +23,7 @@ class Camera:
         
         # Face recognition
         self.recognition_enabled = recognition_enabled
-        self.process_this_frame = True  # Process every other frame to save CPU
+        self.process_this_frame = True  # Always process frames for better recognition
         self.face_processor = FaceProcessor()
         
         # Start the camera
@@ -95,23 +95,20 @@ class Camera:
                 
                 # Process for face recognition if enabled
                 if self.recognition_enabled:
-                    if self.process_this_frame:
-                        try:
-                            # Clean old faces periodically
-                            if time.time() % 10 < 0.1:  # Roughly every 10 seconds
-                                self.face_processor.clean_old_faces()
-                            
-                            # Process the frame for face recognition
-                            self.processed_frame, recognized_ids = self.face_processor.process_frame(frame)
-                            
-                        except Exception as e:
-                            print(f"Error in face recognition processing: {e}")
-                            self.last_error = str(e)
-                            # Keep the original frame without processing
-                            self.processed_frame = frame.copy()
-                    
-                    # Toggle flag to process every other frame (saves CPU)
-                    self.process_this_frame = not self.process_this_frame
+                    try:
+                        # Clean old faces periodically
+                        if time.time() % 10 < 0.1:  # Roughly every 10 seconds
+                            self.face_processor.clean_old_faces()
+                        
+                        # Process the frame for face recognition
+                        # Process every frame for better recognition
+                        self.processed_frame, recognized_ids = self.face_processor.process_frame(frame)
+                        
+                    except Exception as e:
+                        print(f"Error in face recognition processing: {e}")
+                        self.last_error = str(e)
+                        # Keep the original frame without processing
+                        self.processed_frame = frame.copy()
                 
             except Exception as e:
                 self.last_error = str(e)

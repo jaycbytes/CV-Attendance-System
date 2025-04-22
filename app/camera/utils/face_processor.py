@@ -24,8 +24,9 @@ class FaceProcessor:
         self.known_face_ids = []
         self.known_face_images = {}  # Store member images from database: {member_id: image}
         
-        # Face similarity threshold (lower = more strict matching)
-        self.face_similarity_threshold = 0.6
+        # Face similarity threshold (lower = more strict matching, higher = more permissive)
+        # Increasing to 0.7 to improve distance recognition
+        self.face_similarity_threshold = 0.7
         
         # Persistent face tracking
         self.persistent_faces = {
@@ -184,28 +185,31 @@ class FaceProcessor:
             for unknown_face in self.persistent_faces["unknown"]:
                 unknown_face["in_view"] = False
             
-            # Resize frame for faster face recognition
-            small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+            # Resize frame for face recognition - increased scale for better distance detection
+            # Using 0.5 scale instead of 0.25 to capture more detail for distance recognition
+            small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
             
             # Convert from BGR (OpenCV) to RGB (face_recognition)
             rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
             
-            # Find faces in the current frame
-            self.face_locations = face_recognition.face_locations(rgb_small_frame, model="hog")
+            # Find faces in the current frame - using CNN model for better distance recognition
+            # CNN is more accurate but slower, but worth it for improved detection
+            model = "cnn" if cv2.cuda.getCudaEnabledDeviceCount() > 0 else "hog"
+            self.face_locations = face_recognition.face_locations(rgb_small_frame, model=model)
             self.face_encodings = face_recognition.face_encodings(rgb_small_frame, self.face_locations)
             
             # Create thumbnails of each face
             current_thumbnails = []
             for (top, right, bottom, left) in self.face_locations:
-                # Scale back up face location since we resized by 1/4
-                scale = 4.0
+                # Scale back up face location since we resized by 1/2 now (changed from 1/4)
+                scale = 2.0
                 top_scaled = int(top * scale)
                 right_scaled = int(right * scale)
                 bottom_scaled = int(bottom * scale)
                 left_scaled = int(left * scale)
                 
-                # Add some padding around the face
-                padding = 20
+                # Add more padding around the face for better recognition
+                padding = 40  # Increased from 20 to improve recognition
                 top_scaled = max(0, top_scaled - padding)
                 left_scaled = max(0, left_scaled - padding)
                 bottom_scaled = min(frame.shape[0], bottom_scaled + padding)
@@ -269,11 +273,11 @@ class FaceProcessor:
             
             # Draw the results on the processed frame
             for (top, right, bottom, left), name in zip(self.face_locations, self.face_names):
-                # Scale back up face locations since the frame we detected in was 1/4 size
-                top *= 4
-                right *= 4
-                bottom *= 4
-                left *= 4
+                # Scale back up face locations since the frame we detected in was 1/2 size (changed from 1/4)
+                top *= 2
+                right *= 2
+                bottom *= 2
+                left *= 2
                 
                 # Draw a box around the face
                 cv2.rectangle(processed_frame, (left, top), (right, bottom), (0, 0, 255), 2)

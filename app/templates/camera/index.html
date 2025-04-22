@@ -154,41 +154,36 @@
         word-wrap: break-word;
     }
     
-    /* Member Modal Form */
+    /* Member Modal Form - No background overlay */
     .modal-overlay {
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(0, 0, 0, 0.6);
         z-index: 1000;
         display: flex;
         justify-content: center;
         align-items: center;
-        animation: fadeIn 0.3s ease;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
+        pointer-events: none; /* Allow clicking through the overlay */
     }
     
     .member-modal {
         background-color: white;
         border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-        width: 90%;
-        max-width: 500px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        width: 95%;
+        max-width: 550px;
         max-height: 90vh;
         overflow-y: auto;
         padding: 0;
         position: relative;
-        animation: slideIn 0.3s ease-out;
+        animation: slideIn 0.2s ease-out;
+        pointer-events: auto; /* Restore pointer events for the modal itself */
     }
     
     @keyframes slideIn {
-        from { transform: translateY(20px); opacity: 0; }
+        from { transform: translateY(10px); opacity: 0; }
         to { transform: translateY(0); opacity: 1; }
     }
     
@@ -270,6 +265,7 @@
         border: 1px solid #ddd;
         border-radius: 4px;
         font-size: 1rem;
+        font-family: inherit; /* Ensure consistent font family */
         box-sizing: border-box;
     }
     
@@ -277,6 +273,59 @@
         border-color: #4CAF50;
         outline: none;
         box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+    }
+    
+    /* Ensure all form inputs use the same font family */
+    input, textarea, select, button {
+        font-family: inherit;
+    }
+    
+    /* Profile image options */
+    .image-options {
+        margin-top: 10px;
+    }
+    
+    .current-image {
+        text-align: center;
+        margin-bottom: 15px;
+    }
+    
+    .current-image img {
+        max-width: 150px;
+        max-height: 150px;
+        border-radius: 50%;
+        border: 3px solid #4CAF50;
+        object-fit: cover;
+    }
+    
+    .image-option-tabs {
+        display: flex;
+        border-bottom: 1px solid #ddd;
+        margin-bottom: 15px;
+    }
+    
+    .tab-btn {
+        flex: 1;
+        background: none;
+        border: none;
+        padding: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-weight: 500;
+        color: #666;
+    }
+    
+    .tab-btn.active {
+        color: #4CAF50;
+        border-bottom: 2px solid #4CAF50;
+    }
+    
+    .image-option-content {
+        padding: 10px 0;
+    }
+    
+    .file-input {
+        padding: 8px;
     }
     
     /* Face Galleries */
@@ -657,6 +706,34 @@
                         <div class="member-form-group">
                             <label for="form-bio" class="member-form-label">Bio</label>
                             <textarea id="form-bio" class="member-form-input" rows="3" placeholder="Enter a brief bio"></textarea>
+                        </div>
+                        
+                        <div class="member-form-group">
+                            <label class="member-form-label">Profile Image</label>
+                            <div class="image-options">
+                                <div class="current-image">
+                                    <p>Current image:</p>
+                                    <img id="current-profile-image" src="" alt="Current profile image">
+                                </div>
+                                <div class="image-option-tabs">
+                                    <button type="button" id="tab-upload" class="tab-btn active">Upload Image</button>
+                                    <button type="button" id="tab-capture" class="tab-btn">Capture Image</button>
+                                </div>
+                                <div id="upload-option" class="image-option-content">
+                                    <input type="file" id="profile-image-upload" class="member-form-input file-input" accept="image/*">
+                                    <small class="form-text text-muted">Upload a new image to replace the current one.</small>
+                                </div>
+                                <div id="capture-option" class="image-option-content" style="display: none;">
+                                    <div id="capture-preview-container">
+                                        <video id="capture-preview" autoplay muted style="width: 100%; max-height: 200px; border-radius: 4px;"></video>
+                                    </div>
+                                    <button type="button" id="start-camera-btn" class="btn btn-info">Start Camera</button>
+                                    <button type="button" id="capture-image-btn" class="btn btn-success" style="display: none;">Capture</button>
+                                    <canvas id="capture-canvas" style="display: none;"></canvas>
+                                    <img id="captured-image" style="display: none; max-width: 100%; border-radius: 4px; margin-top: 10px;">
+                                    <input type="hidden" id="captured-image-data">
+                                </div>
+                            </div>
                         </div>
                         
                         <div class="modal-actions">
@@ -1412,6 +1489,9 @@
             // Set face thumbnail
             modalFacePreview.src = `/camera/face_thumbnail/${face.thumbnail_id}`;
             
+            // Also set as current profile image
+            document.getElementById('current-profile-image').src = `/camera/face_thumbnail/${face.thumbnail_id}`;
+            
             // Store face ID for form submission
             formFaceId.value = face.thumbnail_id;
             formMemberId.value = '';
@@ -1425,6 +1505,9 @@
             formMajor.value = '';
             formAge.value = '';
             formBio.value = '';
+            
+            // Reset webcam state if it was previously used
+            resetWebcamState();
             
             // Show the modal
             memberModalOverlay.classList.remove('hidden');
@@ -1453,6 +1536,12 @@
                     formAge.value = data.age || '';
                     formBio.value = data.bio || '';
                     
+                    // Also set as current profile image
+                    document.getElementById('current-profile-image').src = `/camera/face_thumbnail/${face.thumbnail_id}`;
+                    
+                    // Reset webcam state if it was previously used
+                    resetWebcamState();
+                    
                     // Show the modal
                     memberModalOverlay.classList.remove('hidden');
                 })
@@ -1465,6 +1554,8 @@
         // Function to close the member modal
         function closeModal() {
             memberModalOverlay.classList.add('hidden');
+            // Also stop webcam if active
+            resetWebcamState();
         }
         
         // Legacy function for backward compatibility
@@ -1763,9 +1854,118 @@
             currentSelectedFaceIndex = -1;
         });
         
+        // Webcam capture functionality
+        let captureStream = null;
+        const capturePreview = document.getElementById('capture-preview');
+        const startCameraBtn = document.getElementById('start-camera-btn');
+        const captureImageBtn = document.getElementById('capture-image-btn');
+        const captureCanvas = document.getElementById('capture-canvas');
+        const capturedImage = document.getElementById('captured-image');
+        const capturedImageData = document.getElementById('captured-image-data');
+        const tabUpload = document.getElementById('tab-upload');
+        const tabCapture = document.getElementById('tab-capture');
+        const uploadOption = document.getElementById('upload-option');
+        const captureOption = document.getElementById('capture-option');
+        const profileImageUpload = document.getElementById('profile-image-upload');
+        
+        // Function to reset webcam state
+        function resetWebcamState() {
+            if (captureStream) {
+                // Stop all tracks
+                captureStream.getTracks().forEach(track => track.stop());
+                captureStream = null;
+            }
+            
+            // Reset UI
+            capturePreview.style.display = 'none';
+            captureImageBtn.style.display = 'none';
+            startCameraBtn.style.display = 'block';
+            capturedImage.style.display = 'none';
+            capturedImageData.value = '';
+            
+            // Reset to upload tab
+            tabUpload.classList.add('active');
+            tabCapture.classList.remove('active');
+            uploadOption.style.display = 'block';
+            captureOption.style.display = 'none';
+        }
+        
+        // Tab switching
+        tabUpload.addEventListener('click', function() {
+            tabUpload.classList.add('active');
+            tabCapture.classList.remove('active');
+            uploadOption.style.display = 'block';
+            captureOption.style.display = 'none';
+        });
+        
+        tabCapture.addEventListener('click', function() {
+            tabUpload.classList.remove('active');
+            tabCapture.classList.add('active');
+            uploadOption.style.display = 'none';
+            captureOption.style.display = 'block';
+        });
+        
+        // Start webcam
+        startCameraBtn.addEventListener('click', function() {
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                .then(stream => {
+                    captureStream = stream;
+                    capturePreview.srcObject = stream;
+                    capturePreview.style.display = 'block';
+                    startCameraBtn.style.display = 'none';
+                    captureImageBtn.style.display = 'inline-block';
+                })
+                .catch(error => {
+                    console.error('Error accessing webcam:', error);
+                    showToast('Could not access webcam. Please check permissions.', 'danger');
+                });
+        });
+        
+        // Capture image from webcam
+        captureImageBtn.addEventListener('click', function() {
+            // Set canvas dimensions to match video
+            captureCanvas.width = capturePreview.videoWidth;
+            captureCanvas.height = capturePreview.videoHeight;
+            
+            // Draw video frame to canvas
+            const ctx = captureCanvas.getContext('2d');
+            ctx.drawImage(capturePreview, 0, 0, captureCanvas.width, captureCanvas.height);
+            
+            // Convert to image
+            const imageData = captureCanvas.toDataURL('image/jpeg');
+            capturedImageData.value = imageData;
+            
+            // Display captured image
+            capturedImage.src = imageData;
+            capturedImage.style.display = 'block';
+            capturePreview.style.display = 'none';
+            captureImageBtn.textContent = 'Recapture';
+            
+            // Update the profile image preview
+            document.getElementById('current-profile-image').src = imageData;
+        });
+        
+        // Preview uploaded image
+        profileImageUpload.addEventListener('change', function(e) {
+            if (this.files && this.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('current-profile-image').src = e.target.result;
+                };
+                reader.readAsDataURL(this.files[0]);
+            }
+        });
+        
         // Modal events
-        closeModalBtn.addEventListener('click', closeModal);
-        cancelFormBtn.addEventListener('click', closeModal);
+        closeModalBtn.addEventListener('click', function() {
+            closeModal();
+            resetWebcamState();
+        });
+        
+        cancelFormBtn.addEventListener('click', function() {
+            closeModal();
+            resetWebcamState();
+        });
         
         // Handle clicks outside the modal to close it
         memberModalOverlay.addEventListener('click', function(e) {
@@ -1803,13 +2003,34 @@
                 action: formAction.value
             };
             
+            // Check if we have an uploaded or captured image
+            if (profileImageUpload.files && profileImageUpload.files[0]) {
+                // File was selected through upload
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    formData.image_data = e.target.result;
+                    submitFormToServer(formData);
+                };
+                reader.readAsDataURL(profileImageUpload.files[0]);
+            } else if (capturedImageData.value) {
+                // Image was captured via webcam
+                formData.image_data = capturedImageData.value;
+                submitFormToServer(formData);
+            } else {
+                // No new image, use existing one
+                submitFormToServer(formData);
+            }
+        });
+        
+        // Function to submit form data to server
+        function submitFormToServer(formData) {
             // For edit action, include member_id
-            if (formAction.value === 'edit') {
+            if (formData.action === 'edit') {
                 formData.member_id = formMemberId.value;
             }
             
             // Send data to server
-            const endpoint = formAction.value === 'add' 
+            const endpoint = formData.action === 'add' 
                 ? '/camera/recognition/enroll'
                 : '/camera/member/update';
                 
@@ -1834,6 +2055,7 @@
                 
                 // Close the modal
                 closeModal();
+                resetWebcamState();
                 
                 // Reset form and button
                 memberForm.reset();
@@ -1841,7 +2063,7 @@
                 saveFormBtn.textContent = 'Save Member';
                 
                 // For add action with successful enrollment, add to queue
-                if (formAction.value === 'add' && data.member_id) {
+                if (formData.action === 'add' && data.member_id) {
                     // Force update of recognition results to get the new member
                     updateRecognitionResult();
                     
@@ -1860,7 +2082,7 @@
                 saveFormBtn.disabled = false;
                 saveFormBtn.textContent = 'Save Member';
             });
-        });
+        }
         
         // Reset camera state when page loads - this ensures we start fresh for each meeting
         function resetCameraState() {

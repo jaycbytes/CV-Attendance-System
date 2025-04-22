@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}Database Management - Attendance AI{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2>Database Management</h2>
+    </div>
+    <div class="card-body">
+        <div class="dashboard-stats">
+            <div class="stat-card">
+                <div class="stat-label">Database Size</div>
+                <div class="stat-number">{{ "%.2f"|format(db_size) }} MB</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Member Records</div>
+                <div class="stat-number">{{ member_count }}</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Meeting Records</div>
+                <div class="stat-number">{{ meeting_count }}</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Attendance Records</div>
+                <div class="stat-number">{{ attendance_count }}</div>
+            </div>
+        </div>
+        
+        <div class="mt-5">
+            <h3>Database Operations</h3>
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="mb-3">Reset Attendance Records</h4>
+                    <p>This will clear all attendance records while keeping your members and meetings.</p>
+                    <form action="{{ url_for('admin.reset_attendance') }}" method="post" onsubmit="return confirm('Are you sure you want to reset all attendance records? This cannot be undone.');">
+                        <button type="submit" class="btn btn-warning">Reset Attendance Records</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="mb-3">Reset Everything</h4>
+                    <p class="text-danger">WARNING: This will delete all members, meetings, and attendance records. This action cannot be undone.</p>
+                    <form action="{{ url_for('admin.reset_database') }}" method="post" onsubmit="return confirm('Are you absolutely sure you want to reset the entire database? ALL DATA WILL BE LOST and this action cannot be undone.');">
+                        <button type="submit" class="btn btn-danger">Reset Entire Database</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="mb-3">Export Data</h4>
+                    <p>Export your data to CSV format for backup or analysis.</p>
+                    <div class="d-flex" style="gap: 10px;">
+                        <a href="{{ url_for('admin.export_members') }}" class="btn btn-secondary">Export Members</a>
+                        <a href="{{ url_for('admin.export_meetings') }}" class="btn btn-secondary">Export Meetings</a>
+                        <a href="{{ url_for('admin.export_attendance') }}" class="btn btn-secondary">Export Attendance</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-right mt-4">
+            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

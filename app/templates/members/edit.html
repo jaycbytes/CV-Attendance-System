@@ -33,18 +33,39 @@
             </div>
             
             <div class="form-group">
-                <label for="profile_image">Profile Image</label>
+                <label>Profile Image</label>
                 {% if member['image_path'] %}
-                <div style="margin-bottom: 10px;">
+                <div class="current-image" style="text-align: center; margin-bottom: 15px;">
                     <p>Current image:</p>
-                    <img src="{{ url_for('static', filename='member_images/' + member['image_path']) }}" 
-                         alt="{{ member['name'] }}" style="max-width: 200px; max-height: 200px;">
+                    <img id="current-profile-image" src="{{ url_for('static', filename='member_images/' + member['image_path']) }}" 
+                         alt="{{ member['name'] }}" style="max-width: 200px; max-height: 200px; border-radius: 8px;">
                 </div>
                 {% endif %}
-                <input type="file" name="profile_image" id="profile_image" class="form-control" accept="image/*">
-                <small class="form-text text-muted">
-                    Upload a new image to replace the current one. Leave empty to keep the current image.
-                </small>
+                
+                <div class="image-options">
+                    <div class="image-option-tabs" style="display: flex; border-bottom: 1px solid #ddd; margin-bottom: 15px;">
+                        <button type="button" id="tab-upload" class="tab-btn active" style="flex: 1; background: none; border: none; padding: 10px; cursor: pointer; transition: all 0.2s;">Upload Image</button>
+                        <button type="button" id="tab-capture" class="tab-btn" style="flex: 1; background: none; border: none; padding: 10px; cursor: pointer; transition: all 0.2s;">Capture Image</button>
+                    </div>
+                    
+                    <div id="upload-option" class="image-option-content">
+                        <input type="file" name="profile_image" id="profile_image" class="form-control" accept="image/*">
+                        <small class="form-text text-muted">
+                            Upload a new image to replace the current one. Leave empty to keep the current image.
+                        </small>
+                    </div>
+                    
+                    <div id="capture-option" class="image-option-content" style="display: none;">
+                        <div id="capture-preview-container">
+                            <video id="capture-preview" autoplay muted style="width: 100%; max-height: 200px; border-radius: 4px; display: none;"></video>
+                        </div>
+                        <button type="button" id="start-camera-btn" class="btn btn-info">Start Camera</button>
+                        <button type="button" id="capture-image-btn" class="btn btn-success" style="display: none;">Capture</button>
+                        <canvas id="capture-canvas" style="display: none;"></canvas>
+                        <img id="captured-image" style="display: none; max-width: 100%; border-radius: 4px; margin-top: 10px;">
+                        <input type="hidden" name="captured_image_data" id="captured-image-data">
+                    </div>
+                </div>
             </div>
             
             <div style="margin-top: 20px;">
@@ -54,4 +75,125 @@
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Elements
+        const tabUpload = document.getElementById('tab-upload');
+        const tabCapture = document.getElementById('tab-capture');
+        const uploadOption = document.getElementById('upload-option');
+        const captureOption = document.getElementById('capture-option');
+        const startCameraBtn = document.getElementById('start-camera-btn');
+        const captureImageBtn = document.getElementById('capture-image-btn');
+        const capturePreview = document.getElementById('capture-preview');
+        const captureCanvas = document.getElementById('capture-canvas');
+        const capturedImage = document.getElementById('captured-image');
+        const capturedImageData = document.getElementById('captured-image-data');
+        const profileImageUpload = document.getElementById('profile_image');
+        const currentProfileImage = document.getElementById('current-profile-image');
+        
+        // Stream variable
+        let captureStream = null;
+        
+        // Tab switching
+        tabUpload.addEventListener('click', function() {
+            tabUpload.classList.add('active');
+            tabCapture.classList.remove('active');
+            uploadOption.style.display = 'block';
+            captureOption.style.display = 'none';
+            
+            // Apply active style
+            tabUpload.style.color = '#4CAF50';
+            tabUpload.style.borderBottom = '2px solid #4CAF50';
+            tabCapture.style.color = '#666';
+            tabCapture.style.borderBottom = 'none';
+        });
+        
+        tabCapture.addEventListener('click', function() {
+            tabUpload.classList.remove('active');
+            tabCapture.classList.add('active');
+            uploadOption.style.display = 'none';
+            captureOption.style.display = 'block';
+            
+            // Apply active style
+            tabCapture.style.color = '#4CAF50';
+            tabCapture.style.borderBottom = '2px solid #4CAF50';
+            tabUpload.style.color = '#666';
+            tabUpload.style.borderBottom = 'none';
+        });
+        
+        // Start webcam button
+        startCameraBtn.addEventListener('click', function() {
+            if (captureStream) {
+                // Stop existing stream
+                captureStream.getTracks().forEach(track => track.stop());
+                captureStream = null;
+            }
+            
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                .then(stream => {
+                    captureStream = stream;
+                    capturePreview.srcObject = stream;
+                    capturePreview.style.display = 'block';
+                    startCameraBtn.style.display = 'none';
+                    captureImageBtn.style.display = 'inline-block';
+                    capturedImage.style.display = 'none';
+                })
+                .catch(error => {
+                    console.error('Error accessing webcam:', error);
+                    alert('Could not access webcam. Please check permissions.');
+                });
+        });
+        
+        // Capture image button
+        captureImageBtn.addEventListener('click', function() {
+            // Set canvas dimensions to match video
+            captureCanvas.width = capturePreview.videoWidth;
+            captureCanvas.height = capturePreview.videoHeight;
+            
+            // Draw video frame to canvas
+            const ctx = captureCanvas.getContext('2d');
+            ctx.drawImage(capturePreview, 0, 0, captureCanvas.width, captureCanvas.height);
+            
+            // Convert to image
+            const imageData = captureCanvas.toDataURL('image/jpeg');
+            capturedImageData.value = imageData;
+            
+            // Display captured image
+            capturedImage.src = imageData;
+            capturedImage.style.display = 'block';
+            capturePreview.style.display = 'none';
+            
+            // Update button text
+            captureImageBtn.textContent = 'Recapture';
+            
+            // Update the profile image preview if it exists
+            if (currentProfileImage) {
+                currentProfileImage.src = imageData;
+            }
+        });
+        
+        // Preview uploaded image
+        profileImageUpload.addEventListener('change', function(e) {
+            if (this.files && this.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    if (currentProfileImage) {
+                        currentProfileImage.src = e.target.result;
+                    }
+                };
+                reader.readAsDataURL(this.files[0]);
+            }
+        });
+        
+        // Clean up webcam when form is submitted
+        document.querySelector('form').addEventListener('submit', function() {
+            if (captureStream) {
+                captureStream.getTracks().forEach(track => track.stop());
+            }
+        });
+    });
+</script>
 {% endblock %}

@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+
+{% block title %}Active Meeting - Attendance AI{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Currently Active Meeting</h2>
+            <div class="meeting-actions">
+                <a href="{{ url_for('meetings.edit', id=meeting['id']) }}" class="btn btn-primary">Edit</a>
+                <form action="{{ url_for('meetings.end', id=meeting['id']) }}" method="post" style="display: inline;">
+                    <button type="submit" class="btn btn-warning">End Meeting</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="meeting-details">
+            <h3>Meeting Information</h3>
+            <table class="table">
+                <tr>
+                    <th style="width: 150px;">Title:</th>
+                    <td>{{ meeting['title'] }}</td>
+                </tr>
+                {% if meeting['description'] %}
+                <tr>
+                    <th>Description:</th>
+                    <td>{{ meeting['description'] }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <th>Start Time:</th>
+                    <td>{{ meeting['start_time'].strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                </tr>
+                <tr>
+                    <th>Duration:</th>
+                    <td>{{ ((now - meeting['start_time']).seconds // 60) }} minutes</td>
+                </tr>
+                <tr>
+                    <th>Status:</th>
+                    <td>
+                        <div class="status-badge status-active">Active</div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="attendance-section" style="margin-top: 30px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>Attendance ({{ attendees|length }} members)</h3>
+                <div class="attendance-actions">
+                    <a href="{{ url_for('camera.index') }}" class="btn btn-success">
+                        <i class="fas fa-camera"></i> Record Attendance
+                    </a>
+                    <a href="{{ url_for('meetings.export_attendance', id=meeting['id']) }}" class="btn btn-info">
+                        <i class="fas fa-file-export"></i> Export to CSV
+                    </a>
+                </div>
+            </div>
+            
+            {% if attendees %}
+            <div class="attendee-list">
+                {% for attendee in attendees %}
+                <div class="attendee-item">
+                    <div class="attendee-info">
+                        <h4 class="attendee-name">{{ attendee['name'] }}</h4>
+                        <div class="attendee-details">
+                            {{ attendee['major'] if attendee['major'] else '' }}
+                        </div>
+                    </div>
+                    <div class="attendee-timestamp">
+                        {{ attendee['timestamp'].strftime('%Y-%m-%d %H:%M:%S') }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p>No members have been recorded for this meeting yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% block extra_css %}
+<style>
+    /* Status badge styling */
+    .status-badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 1rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+        text-align: center;
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .status-active {
+        background-color: #ebf9f0;
+        color: var(--success);
+        border: 1px solid #c9e9d6;
+    }
+    
+    .meeting-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .attendance-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .attendee-list {
+        margin-top: 15px;
+    }
+    
+    .attendee-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 15px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .attendee-item:last-child {
+        border-bottom: none;
+    }
+    
+    .attendee-name {
+        margin: 0;
+        font-size: 1rem;
+    }
+    
+    .attendee-details {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+    
+    .attendee-timestamp {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+</style>
+{% endblock %}
+{% endblock %}

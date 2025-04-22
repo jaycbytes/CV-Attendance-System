@@ -97,8 +97,39 @@ def edit(id):
         face_encoding = None
         image_path = member['image_path']
         
-        # Handle profile image upload
-        if 'profile_image' in request.files:
+        # Check for captured image data first (from webcam)
+        if 'captured_image_data' in request.form and request.form['captured_image_data']:
+            captured_data = request.form['captured_image_data']
+            if captured_data and captured_data.startswith('data:image'):
+                try:
+                    # Extract the base64 data
+                    image_data = captured_data.split(',')[1]
+                    import base64
+                    decoded_data = base64.b64decode(image_data)
+                    
+                    # Create a unique filename
+                    filename = f"{name.replace(' ', '_').lower()}_webcam.jpg"
+                    filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+                    
+                    # Save the image file
+                    with open(filepath, 'wb') as f:
+                        f.write(decoded_data)
+                    
+                    image_path = filename
+                    
+                    # Generate face encoding from the captured image
+                    image = face_recognition.load_image_file(filepath)
+                    face_encodings = face_recognition.face_encodings(image)
+                    if face_encodings:
+                        face_encoding = face_encodings[0]
+                    else:
+                        flash('No face detected in the captured image.', 'warning')
+                    
+                except Exception as e:
+                    flash(f'Error processing captured image: {e}', 'danger')
+        
+        # Handle profile image upload - only if no webcam image
+        elif 'profile_image' in request.files:
             file = request.files['profile_image']
             if file and file.filename and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
@@ -116,7 +147,7 @@ def edit(id):
                     if face_encodings:
                         face_encoding = face_encodings[0]
                     else:
-                        flash('No face detected in the uploaded image.', 'danger')
+                        flash('No face detected in the uploaded image.', 'warning')
                 except Exception as e:
                     flash(f'Error processing face: {e}', 'danger')
         
