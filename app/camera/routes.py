@@ -1,10 +1,11 @@
 from flask import Blueprint, render_template, Response, request, jsonify, current_app
 from app.camera.camera import Camera, list_available_cameras
-from app.database.members import create_member, get_member_by_name
+from app.database.members import create_member, get_member_by_name, update_member, get_member
 from app.database.attendance import record_attendance
 from app.database.meetings import get_active_meeting
 import os
 import traceback
+import time
 from datetime import datetime
 import cv2
 import face_recognition
@@ -152,42 +153,22 @@ def enroll_face():
         return jsonify({"error": f"A member named '{name}' already exists. Please use a different name."}), 400
     
     try:
-        # Check if we have a frame
-        if active_camera.frame is None:
-            return jsonify({"error": "No camera frame available"}), 400
+        # Get face data from the face processor
+        face_processor = active_camera.face_processor
         
-        # Get the face information - check if it's a legacy numeric index first
+        # Look for the specified face ID in the unknown faces
         face_image = None
         face_encoding = None
         
-        try:
-            # Try to use it as a numeric index (for backward compatibility)
-            index = int(face_index)
-            # If this succeeds, use the index to get the face data
-            if index >= 0 and index < len(active_camera.face_locations) and index < len(active_camera.face_encodings):
-                face_image = active_camera.face_thumbnails[index]
-                face_encoding = active_camera.face_encodings[index]
-        except (ValueError, TypeError):
-            # Not a numeric index, so look for it in the persistent faces
-            for unknown_face in active_camera.persistent_faces["unknown"]:
-                if unknown_face["id"] == face_index:
-                    face_image = unknown_face["image"]
-                    
-                    # We need to get the face encoding - locate the matching face in the current frame
-                    # This assumes the unknown face is currently in view
-                    if unknown_face["in_view"]:
-                        # Find the matching face in the current frame's face_names
-                        for i, face_name in enumerate(active_camera.face_names):
-                            if face_name == "Unknown" and i < len(active_camera.face_encodings):
-                                # This is a hack - we're assuming the first unknown face
-                                # in the current frame matches our persistent unknown face
-                                # A more robust approach would be to add face IDs to the recognition loop
-                                face_encoding = active_camera.face_encodings[i]
-                                break
-        
+        for face in face_processor.persistent_faces["unknown"]:
+            if face["id"] == face_index:
+                face_image = face["image"]
+                face_encoding = face["encoding"]
+                break
+                
         # If we couldn't find the face, return an error
         if face_image is None:
-            return jsonify({"error": "Face not found"}), 404
+            return jsonify({"error": "Face not found. The face may have been removed or the system restarted."}), 404
             
         if face_encoding is None:
             return jsonify({"error": "Face encoding not available. Please ensure the face is in view."}), 400
@@ -203,40 +184,24 @@ def enroll_face():
         # Save to database and get member ID
         member_id = create_member(name, major, age, bio, face_encoding, filename)
         
-        # Add to known faces in memory for immediate recognition
-        active_camera.known_face_encodings.append(face_encoding)
-        active_camera.known_face_names.append(name)
-        active_camera.known_face_ids.append(member_id)
+        # Reload faces from the database to include the new member
+        face_processor.load_known_faces_from_db()
         
-        # Load the saved image back from the database path
-        try:
-            saved_image = cv2.imread(filepath)
-            if saved_image is not None:
-                # Store in the known face images dictionary
-                active_camera.known_face_images[member_id] = saved_image
-        except Exception as img_error:
-            print(f"Error loading saved image: {img_error}")
-            # Fall back to the current face image
-            saved_image = face_image
-        
-        # Add to persistent known faces
-        active_camera.persistent_faces["known"][name] = {
-            "image": saved_image if saved_image is not None else face_image,
+        # Add to persistent known faces - this will make them appear in recognized members list
+        # since they're obviously present in the current session
+        face_processor.persistent_faces["known"][name] = {
+            "image": face_image,
             "in_view": True,
             "last_seen": time.time(),
             "member_id": member_id,
             "encoding": face_encoding
         }
         
-        # Remove from unknown faces if it was there
-        try:
-            # If face_index is an unknown ID, remove that face from unknown faces
-            active_camera.persistent_faces["unknown"] = [
-                face for face in active_camera.persistent_faces["unknown"] 
-                if face["id"] != face_index
-            ]
-        except:
-            pass
+        # Remove from unknown faces
+        face_processor.persistent_faces["unknown"] = [
+            face for face in face_processor.persistent_faces["unknown"] 
+            if face["id"] != face_index
+        ]
         
         # Record attendance for the newly enrolled member
         attendance_recorded = record_new_member_attendance(member_id)
@@ -258,8 +223,16 @@ def enroll_face():
 @bp.route('/list')
 def camera_list():
     """List available cameras."""
-    cameras = list_available_cameras()
-    return jsonify({"cameras": cameras})
+    start_time = time.time()
+    print(f"Camera list requested at {time.strftime('%H:%M:%S')}")
+    
+    # Use the optimized camera detection with reasonable max index (10)
+    cameras = list_available_cameras(max_cameras=10)
+    
+    elapsed = time.time() - start_time
+    print(f"Camera list scan completed in {elapsed:.2f} seconds. Found {len(cameras)} cameras.")
+    
+    return jsonify({"cameras": cameras, "scan_time": f"{elapsed:.2f} seconds"})
 
 @bp.route('/info')
 def camera_info():
@@ -278,7 +251,7 @@ def camera_status():
     
 @bp.route('/face_thumbnail/<thumbnail_id>')
 def face_thumbnail(thumbnail_id):
-    """Get a thumbnail of a specific face by its ID or legacy index."""
+    """Get a thumbnail of a specific face by its ID."""
     global active_camera
     if active_camera is None:
         return "No active camera", 404
@@ -294,8 +267,6 @@ def face_thumbnail(thumbnail_id):
 @bp.route('/member_info/<int:member_id>')
 def member_info(member_id):
     """Get member information for the welcome card."""
-    from app.database.members import get_member
-    
     try:
         member = get_member(member_id)
         if member:
@@ -314,6 +285,107 @@ def member_info(member_id):
         print(f"Error getting member info: {e}")
         return jsonify({"error": f"Failed to get member info: {str(e)}"}), 500
 
+@bp.route('/member/update', methods=['POST'])
+def update_member_info():
+    """Update an existing member's information."""
+    global active_camera
+    
+    if active_camera is None:
+        return jsonify({"error": "No active camera"}), 400
+    
+    # Get all required data for member update
+    data = request.json
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+        
+    member_id = data.get('member_id')
+    name = data.get('name')
+    major = data.get('major', None)
+    age = data.get('age', None)
+    bio = data.get('bio', None)
+    
+    if not member_id or not name:
+        return jsonify({"error": "Member ID and name are required"}), 400
+    
+    try:
+        # Update member in database
+        updated_member = update_member(
+            member_id=member_id,
+            name=name,
+            major=major,
+            age=age,
+            bio=bio
+        )
+        
+        if not updated_member:
+            return jsonify({"error": "Member not found or could not be updated"}), 404
+        
+        # Reload faces from database to refresh the data
+        active_camera.face_processor.load_known_faces_from_db()
+        
+        # Also need to update any persistent faces if present
+        face_processor = active_camera.face_processor
+        
+        # Find any known faces with this member ID
+        old_name = None
+        for face_name in list(face_processor.persistent_faces["known"].keys()):
+            face_data = face_processor.persistent_faces["known"][face_name]
+            if face_data.get("member_id") == member_id:
+                old_name = face_name
+                break
+                
+        # If found and name changed, update the entry
+        if old_name and old_name != name:
+            face_data = face_processor.persistent_faces["known"].pop(old_name)
+            face_processor.persistent_faces["known"][name] = face_data
+        
+        return jsonify({
+            "success": True,
+            "message": f"Updated {name} successfully",
+            "member_id": member_id
+        })
+    except Exception as e:
+        print(f"Error in update_member: {e}")
+        traceback.print_exc()
+        return jsonify({"error": f"Update failed: {str(e)}"}), 500
+
+@bp.route('/reset', methods=['POST'])
+def reset_camera():
+    """Reset the camera recognition state."""
+    global active_camera
+    if active_camera is None:
+        return jsonify({"success": False, "error": "No active camera"}), 400
+    
+    # Reset recognition state
+    active_camera.reset_recognition_state()
+    
+    return jsonify({"success": True, "message": "Camera recognition state reset"})
+
+@bp.route('/record_all_attendance', methods=['POST'])
+def record_all_attendance():
+    """Record attendance for all members in the recognized members list."""
+    global active_camera
+    if active_camera is None:
+        return jsonify({"success": False, "error": "No active camera"}), 400
+    
+    # Get active meeting
+    active_meeting = get_active_meeting()
+    if not active_meeting:
+        return jsonify({"success": False, "error": "No active meeting"}), 400
+    
+    try:
+        # Record attendance for all recognized faces
+        recorded_count = active_camera.face_processor.record_attendance(active_meeting['id'])
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Recorded attendance for {recorded_count} members",
+            "recorded_count": recorded_count
+        })
+    except Exception as e:
+        print(f"Error in record_all_attendance: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @bp.route('/remove_unknown_face/<face_id>', methods=['POST'])
 def remove_unknown_face(face_id):
     """Remove an unknown face from the persistent faces list."""
@@ -322,13 +394,19 @@ def remove_unknown_face(face_id):
         return jsonify({"error": "No active camera"}), 400
     
     try:
+        # Get the face processor
+        face_processor = active_camera.face_processor
+        
+        # Check if the face exists before removing
+        before_count = len(face_processor.persistent_faces["unknown"])
+        
         # Filter out the face with the given ID
-        before_count = len(active_camera.persistent_faces["unknown"])
-        active_camera.persistent_faces["unknown"] = [
-            face for face in active_camera.persistent_faces["unknown"] 
+        face_processor.persistent_faces["unknown"] = [
+            face for face in face_processor.persistent_faces["unknown"] 
             if face["id"] != face_id
         ]
-        after_count = len(active_camera.persistent_faces["unknown"])
+        
+        after_count = len(face_processor.persistent_faces["unknown"])
         
         if before_count == after_count:
             return jsonify({"success": False, "message": "Face not found"}), 404
@@ -342,7 +420,7 @@ def remove_unknown_face(face_id):
         return jsonify({"error": f"Failed to remove face: {str(e)}"}), 500
 
 def generate_frames(camera, show_faces=False):
-    """Generate frames from the camera."""
+    """Generate frames from the camera for streaming."""
     try:
         while True:
             frame = camera.get_frame(show_faces=show_faces)

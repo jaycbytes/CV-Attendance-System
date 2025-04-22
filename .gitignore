@@ -1,7 +1,10 @@
-# Python virtualenv
+# Python virtual environments
+.venv/
 venv/
 env/
 ENV/
+virtualenv/
+.virtualenv/
 
 # Python cache files
 __pycache__/
@@ -15,45 +18,102 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+.eggs/
 
-# IDE files
+# IDE files and editors
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
 .DS_Store
+.project
+.pydevproject
+.settings/
+*.sublime-workspace
+*.sublime-project
 
-# Flask
-instance/
+# Flask specific
+instance/*
+!instance/.gitkeep
 .webassets-cache
+flask_session/
 
-# Database
+# Database files
 *.sqlite
 *.sqlite3
 *.db
+*.sql
 
-# Logs
+# Logs and temporary files
+logs/
 *.log
+npm-debug.log*
+.coverage
+htmlcov/
+tmp/
+temp/
 
-# Environment variables
+# Environment variables and secrets
 .env
 .flaskenv
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# Media files
-*.jpg
-*.jpeg
-*.png
-*.mp4
-*.avi
-*.gif
+# Media files (allow these to be included if needed for development, but generally exclude)
+# Member images (commonly uploaded)
+app/static/member_images/*
+!app/static/member_images/.gitkeep
 
-# Face recognition
+# OpenCV and face recognition related
+*.h5
+*.hdf5
+*.pb
+*.pbtxt
+*.weights
+*.dat
+*.model
+*.t7
+*.pkl
 *.pickle
-face_encodings/
-
-# Member images
-member_images/
 
 # Jupyter Notebooks
 .ipynb_checkpoints
 *.ipynb
+
+# Operating system files
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Unit test / coverage reports
+.coverage
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Any API keys or secrets files
+**/secrets/*
+**/credentials/*
+
+# Profiling data
+profile_output/
+*.prof
+*.lprof
