@@ -32,6 +32,16 @@ class Camera:
         # Recognition results
         self.last_recognition_result = None
         
+        # Store face thumbnails and tracking data
+        self.face_thumbnails = []
+        
+        # Persistent face tracking
+        self.persistent_faces = {
+            "known": {},    # Format: {name: {"image": thumbnail, "in_view": bool, "last_seen": timestamp}}
+            "unknown": []   # Format: [{"id": unique_id, "image": thumbnail, "in_view": bool, "last_seen": timestamp}]
+        }
+        self.unknown_face_counter = 0
+        
         # Load known faces from database
         self.load_known_faces_from_db()
     
@@ -68,6 +78,16 @@ class Camera:
         self.thread.start()
         return self
         
+    def _clean_old_faces(self, max_age_seconds=300):
+        """Remove unknown faces that haven't been seen for a while and are not in view."""
+        current_time = time.time()
+        
+        # Clean up old unknown faces
+        self.persistent_faces["unknown"] = [
+            face for face in self.persistent_faces["unknown"]
+            if face["in_view"] or (current_time - face["last_seen"] < max_age_seconds)
+        ]
+    
     def _capture_loop(self):
         """Capture frames in a loop and process for face recognition if enabled."""
         while not self.stopped:
@@ -83,6 +103,9 @@ class Camera:
                 
                 # Process for face recognition if enabled
                 if self.recognition_enabled:
+                    # Clean old faces periodically (every 100 frames or so)
+                    if self.process_this_frame and (time.time() % 10 < 0.1):  # Roughly every 10 seconds
+                        self._clean_old_faces()
                     # Only process every other frame to save processing power
                     if self.process_this_frame:
                         try:
@@ -96,9 +119,43 @@ class Camera:
                             self.face_locations = face_recognition.face_locations(rgb_small_frame, model="hog")  # Use faster HOG model
                             self.face_encodings = face_recognition.face_encodings(rgb_small_frame, self.face_locations)
                             
-                            # Reset face names for this frame
+                            # Reset face names and thumbnails for current frame processing
                             self.face_names = []
+                            self.face_thumbnails = []
                             recognized_ids = []
+                            
+                            # First, mark all persistent faces as not in view for this frame
+                            for name in self.persistent_faces["known"]:
+                                self.persistent_faces["known"][name]["in_view"] = False
+                                
+                            for unknown_face in self.persistent_faces["unknown"]:
+                                unknown_face["in_view"] = False
+                            
+                            # Create thumbnails of each face for this frame
+                            current_thumbnails = []
+                            for (top, right, bottom, left) in self.face_locations:
+                                # Scale back up face location since we resized by 1/4
+                                scale = 4.0
+                                top_scaled = int(top * scale)
+                                right_scaled = int(right * scale)
+                                bottom_scaled = int(bottom * scale)
+                                left_scaled = int(left * scale)
+                                
+                                # Add some padding around the face
+                                padding = 20
+                                top_scaled = max(0, top_scaled - padding)
+                                left_scaled = max(0, left_scaled - padding)
+                                bottom_scaled = min(frame.shape[0], bottom_scaled + padding)
+                                right_scaled = min(frame.shape[1], right_scaled + padding)
+                                
+                                # Extract the face image
+                                face_image = frame[top_scaled:bottom_scaled, left_scaled:right_scaled]
+                                
+                                # Save the thumbnail for this frame's processing
+                                if face_image.size > 0:
+                                    current_thumbnails.append(face_image)
+                                else:
+                                    current_thumbnails.append(None)  # Placeholder for invalid thumbnails
                             
                             # Check if there are known faces to compare against
                             if len(self.known_face_encodings) > 0:
@@ -150,9 +207,58 @@ class Camera:
                                         member_id = None
                                     
                                     self.face_names.append(name)
+                                    
+                                    # Update persistent known faces
+                                    face_idx = len(self.face_names) - 1
+                                    thumbnail = current_thumbnails[face_idx] if face_idx < len(current_thumbnails) else None
+                                    
+                                    if thumbnail is not None:
+                                        # If this is a known person, update their persistent record
+                                        current_time = time.time()
+                                        if name != "Unknown":
+                                            # Update or create the known face entry
+                                            if name not in self.persistent_faces["known"]:
+                                                self.persistent_faces["known"][name] = {
+                                                    "image": thumbnail,
+                                                    "in_view": True,
+                                                    "last_seen": current_time,
+                                                    "member_id": member_id
+                                                }
+                                            else:
+                                                # Person already known, mark as in view and update last seen
+                                                self.persistent_faces["known"][name]["in_view"] = True
+                                                self.persistent_faces["known"][name]["last_seen"] = current_time
+                                                # Only update thumbnail if it's significantly better quality
+                                                # This keeps the image stable instead of constantly changing
+                                                if thumbnail.size > self.persistent_faces["known"][name]["image"].size * 1.2:
+                                                    self.persistent_faces["known"][name]["image"] = thumbnail
+                                        else:
+                                            # This is an unknown face - add to unknown list if not already tracked
+                                            # We'll use a unique ID for each unknown face
+                                            self.unknown_face_counter += 1
+                                            unknown_id = f"unknown_{self.unknown_face_counter}"
+                                            self.persistent_faces["unknown"].append({
+                                                "id": unknown_id,
+                                                "image": thumbnail,
+                                                "in_view": True,
+                                                "last_seen": current_time
+                                            })
                             else:
                                 # If no known faces are loaded, just mark all faces as unknown
                                 self.face_names = ["Unknown"] * len(self.face_locations)
+                                
+                                # Add all as unknown persistent faces
+                                current_time = time.time()
+                                for i, thumbnail in enumerate(current_thumbnails):
+                                    if thumbnail is not None:
+                                        self.unknown_face_counter += 1
+                                        unknown_id = f"unknown_{self.unknown_face_counter}"
+                                        self.persistent_faces["unknown"].append({
+                                            "id": unknown_id,
+                                            "image": thumbnail,
+                                            "in_view": True,
+                                            "last_seen": current_time
+                                        })
                             
                             # Record attendance for recognized members
                             for member_id in recognized_ids:
@@ -166,34 +272,43 @@ class Camera:
                             self.face_locations = []
                             self.face_encodings = []
                             self.face_names = []
+                            self.face_thumbnails = []
                     
                     # Store the recognition result
-                    if len(self.face_names) > 0:
-                        faces_data = []
-                        for name, location in zip(self.face_names, self.face_locations):
-                            member_id = None
-                            # Safely look up member ID
-                            if name != "Unknown" and name in self.known_face_names:
-                                try:
-                                    member_id = self.known_face_ids[self.known_face_names.index(name)]
-                                except (ValueError, IndexError):
-                                    print(f"Warning: Could not find member ID for {name}")
-                                    
-                            faces_data.append({
-                                "name": name,
-                                "location": location,
-                                "member_id": member_id
-                            })
-                            
-                        self.last_recognition_result = {
-                            "timestamp": time.time(),
-                            "faces": faces_data
-                        }
-                    else:
-                        self.last_recognition_result = {
-                            "timestamp": time.time(),
-                            "faces": []
-                        }
+                    current_time = time.time()
+                    
+                    # Combine both known and unknown persistent faces into a single result
+                    persistent_faces_data = []
+                    
+                    # Add known faces
+                    for name, face_data in self.persistent_faces["known"].items():
+                        persistent_faces_data.append({
+                            "name": name,
+                            "member_id": face_data["member_id"],
+                            "in_view": face_data["in_view"],
+                            "last_seen": face_data["last_seen"],
+                            "time_since_seen": current_time - face_data["last_seen"],
+                            "type": "known",
+                            "thumbnail_id": name.replace(" ", "_").lower()  # Use name as ID for thumbnail retrieval
+                        })
+                    
+                    # Add unknown faces
+                    for face_data in self.persistent_faces["unknown"]:
+                        persistent_faces_data.append({
+                            "name": "Unknown",
+                            "member_id": None,
+                            "in_view": face_data["in_view"],
+                            "last_seen": face_data["last_seen"],
+                            "time_since_seen": current_time - face_data["last_seen"],
+                            "type": "unknown",
+                            "thumbnail_id": face_data["id"]  # Use unique ID for thumbnail retrieval
+                        })
+                    
+                    # Create the full result 
+                    self.last_recognition_result = {
+                        "timestamp": current_time,
+                        "faces": persistent_faces_data
+                    }
                 
                     # Create a copy of the frame with boxes and labels drawn
                     processed_frame = frame.copy()
@@ -245,6 +360,45 @@ class Camera:
     def get_recognition_result(self):
         """Return the last face recognition result."""
         return self.last_recognition_result
+        
+    def get_face_thumbnail(self, thumbnail_id):
+        """Return a specific face thumbnail as JPEG bytes.
+        
+        Args:
+            thumbnail_id: Either a name (for known faces) or unique ID (for unknown faces)
+        """
+        try:
+            # First check if it's a known face
+            for name, data in self.persistent_faces["known"].items():
+                name_id = name.replace(" ", "_").lower()
+                if name_id == thumbnail_id or name == thumbnail_id:
+                    # Return the persistent thumbnail
+                    ret, jpeg = cv2.imencode('.jpg', data["image"])
+                    if ret:
+                        return jpeg.tobytes()
+            
+            # Then check unknown faces
+            for face in self.persistent_faces["unknown"]:
+                if face["id"] == thumbnail_id:
+                    # Return the unknown face thumbnail
+                    ret, jpeg = cv2.imencode('.jpg', face["image"])
+                    if ret:
+                        return jpeg.tobytes()
+                        
+            # Fallback for numeric indices (for backward compatibility)
+            try:
+                index = int(thumbnail_id)
+                if 0 <= index < len(self.face_thumbnails):
+                    ret, jpeg = cv2.imencode('.jpg', self.face_thumbnails[index])
+                    if ret:
+                        return jpeg.tobytes()
+            except (ValueError, TypeError):
+                pass
+                
+        except Exception as e:
+            print(f"Error getting face thumbnail '{thumbnail_id}': {e}")
+            
+        return None
     
     def toggle_recognition(self, enabled=None):
         """Toggle face recognition processing."""
