@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Attendance AI{% endblock %}</title>
+    <!-- Modern typography from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom stylesheet -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     {% block extra_css %}{% endblock %}
 </head>
@@ -31,7 +36,7 @@
         </nav>
     </header>
 
-    <div class="container">
+    <div class="container animate-fade-in">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -47,9 +52,11 @@
     
     <script>
         // Close flash messages when clicked
-        document.querySelectorAll('.alert').forEach(function(alert) {
-            alert.addEventListener('click', function() {
-                this.style.display = 'none';
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.alert').forEach(function(alert) {
+                alert.addEventListener('click', function() {
+                    this.style.display = 'none';
+                });
             });
         });
     </script>
