@@ -28,6 +28,7 @@ class Camera:
         self.known_face_encodings = []
         self.known_face_names = []
         self.known_face_ids = []
+        self.known_face_images = {}  # Store member images from database: {member_id: image}
         
         # Recognition results
         self.last_recognition_result = None
@@ -37,26 +38,119 @@ class Camera:
         
         # Persistent face tracking
         self.persistent_faces = {
-            "known": {},    # Format: {name: {"image": thumbnail, "in_view": bool, "last_seen": timestamp}}
-            "unknown": []   # Format: [{"id": unique_id, "image": thumbnail, "in_view": bool, "last_seen": timestamp}]
+            "known": {},    # Format: {name: {"image": thumbnail, "in_view": bool, "last_seen": timestamp, "encoding": face_encoding}}
+            "unknown": []   # Format: [{"id": unique_id, "image": thumbnail, "in_view": bool, "last_seen": timestamp, "encoding": face_encoding}]
         }
         self.unknown_face_counter = 0
+        
+        # Face similarity threshold for tracking (lower = more strict matching)
+        self.face_similarity_threshold = 0.6
         
         # Load known faces from database
         self.load_known_faces_from_db()
     
     def load_known_faces_from_db(self):
-        """Load known face encodings and names from the database."""
+        """Load known face encodings, names and member images from the database."""
         try:
+            # Get face encodings and member data
             encodings, names, member_ids = get_all_face_encodings()
             self.known_face_encodings = encodings
             self.known_face_names = names
             self.known_face_ids = member_ids
+            
+            # Reset the known faces dictionary in persistent faces
+            # (we'll rebuild it with the latest DB data)
+            self.persistent_faces["known"] = {}
+            
+            # Load member images and create persistent known face entries
+            from app.database.members import get_member
+            import os
+            import cv2
+            from flask import current_app
+            
+            for i, member_id in enumerate(member_ids):
+                if member_id is None:
+                    continue
+                
+                try:
+                    # Get member details including image path
+                    member = get_member(member_id)
+                    if member and member['image_path']:
+                        # Construct the full image path
+                        image_path = os.path.join(current_app.config['UPLOAD_FOLDER'], member['image_path'])
+                        
+                        # Load the image if it exists
+                        if os.path.exists(image_path):
+                            image = cv2.imread(image_path)
+                            if image is not None:
+                                # Store the image for this member
+                                self.known_face_images[member_id] = image
+                                
+                                # Add or update entry in persistent known faces
+                                name = member['name']
+                                self.persistent_faces["known"][name] = {
+                                    "image": image,
+                                    "in_view": False,
+                                    "last_seen": 0,  # Will be updated when seen
+                                    "member_id": member_id,
+                                    "encoding": encodings[i] if i < len(encodings) else None
+                                }
+                except Exception as img_error:
+                    print(f"Error loading image for member {member_id}: {img_error}")
+                    
             return True
         except Exception as e:
             print(f"Error loading faces from database: {e}")
             return False
         
+    def _match_unknown_face(self, face_encoding):
+        """Match a face encoding against existing unknown faces.
+        
+        Args:
+            face_encoding: The face encoding to match.
+            
+        Returns:
+            The matched face entry if found, None otherwise.
+        """
+        # If we don't have any unknown faces yet, there's nothing to match against
+        if not self.persistent_faces["unknown"]:
+            return None
+        
+        # Get encodings from all unknown faces
+        unknown_encodings = []
+        for face in self.persistent_faces["unknown"]:
+            if "encoding" in face and face["encoding"] is not None:
+                unknown_encodings.append((face, face["encoding"]))
+        
+        # No valid encodings to compare against
+        if not unknown_encodings:
+            return None
+        
+        # Compare the new face against all existing unknown faces
+        try:
+            # Calculate all face distances
+            min_distance = float('inf')
+            best_match = None
+            
+            for face_entry, encoding in unknown_encodings:
+                # Calculate face distance
+                face_distance = face_recognition.face_distance([encoding], face_encoding)[0]
+                
+                # Check if this is the best match so far
+                if face_distance < min_distance:
+                    min_distance = face_distance
+                    best_match = face_entry
+            
+            # Return the best match if it's below our threshold
+            if min_distance < self.face_similarity_threshold:
+                return best_match
+            
+            # No matches found below threshold
+            return None
+        except Exception as e:
+            print(f"Error matching unknown face: {e}")
+            return None
+            
     def load_known_faces(self, face_encodings, face_names):
         """Load known face encodings and names manually."""
         self.known_face_encodings = face_encodings
@@ -233,16 +327,29 @@ class Camera:
                                                 if thumbnail.size > self.persistent_faces["known"][name]["image"].size * 1.2:
                                                     self.persistent_faces["known"][name]["image"] = thumbnail
                                         else:
-                                            # This is an unknown face - add to unknown list if not already tracked
-                                            # We'll use a unique ID for each unknown face
-                                            self.unknown_face_counter += 1
-                                            unknown_id = f"unknown_{self.unknown_face_counter}"
-                                            self.persistent_faces["unknown"].append({
-                                                "id": unknown_id,
-                                                "image": thumbnail,
-                                                "in_view": True,
-                                                "last_seen": current_time
-                                            })
+                                            # This is an unknown face - check if it matches any existing unknown faces
+                                            # before creating a new entry
+                                            matched_face = self._match_unknown_face(face_encoding)
+                                            
+                                            if matched_face:
+                                                # Update the existing face entry
+                                                matched_face["in_view"] = True
+                                                matched_face["last_seen"] = current_time
+                                                # Only update the thumbnail if it's significantly better
+                                                if thumbnail.size > matched_face["image"].size * 1.2:
+                                                    matched_face["image"] = thumbnail
+                                            else:
+                                                # No match found, create a new unknown face entry
+                                                self.unknown_face_counter += 1
+                                                unknown_id = f"unknown_{self.unknown_face_counter}"
+                                                new_unknown = {
+                                                    "id": unknown_id,
+                                                    "image": thumbnail,
+                                                    "in_view": True,
+                                                    "last_seen": current_time,
+                                                    "encoding": face_encoding
+                                                }
+                                                self.persistent_faces["unknown"].append(new_unknown)
                             else:
                                 # If no known faces are loaded, just mark all faces as unknown
                                 self.face_names = ["Unknown"] * len(self.face_locations)
@@ -250,15 +357,29 @@ class Camera:
                                 # Add all as unknown persistent faces
                                 current_time = time.time()
                                 for i, thumbnail in enumerate(current_thumbnails):
-                                    if thumbnail is not None:
-                                        self.unknown_face_counter += 1
-                                        unknown_id = f"unknown_{self.unknown_face_counter}"
-                                        self.persistent_faces["unknown"].append({
-                                            "id": unknown_id,
-                                            "image": thumbnail,
-                                            "in_view": True,
-                                            "last_seen": current_time
-                                        })
+                                    if thumbnail is not None and i < len(self.face_encodings):
+                                        # Try to match with existing unknown faces first
+                                        face_encoding = self.face_encodings[i]
+                                        matched_face = self._match_unknown_face(face_encoding)
+                                        
+                                        if matched_face:
+                                            # Update the existing face entry
+                                            matched_face["in_view"] = True
+                                            matched_face["last_seen"] = current_time
+                                            # Only update the thumbnail if it's significantly better
+                                            if thumbnail.size > matched_face["image"].size * 1.2:
+                                                matched_face["image"] = thumbnail
+                                        else:
+                                            # Create a new unknown face entry
+                                            self.unknown_face_counter += 1
+                                            unknown_id = f"unknown_{self.unknown_face_counter}"
+                                            self.persistent_faces["unknown"].append({
+                                                "id": unknown_id,
+                                                "image": thumbnail,
+                                                "in_view": True,
+                                                "last_seen": current_time,
+                                                "encoding": face_encoding
+                                            })
                             
                             # Record attendance for recognized members
                             for member_id in recognized_ids:
@@ -372,7 +493,15 @@ class Camera:
             for name, data in self.persistent_faces["known"].items():
                 name_id = name.replace(" ", "_").lower()
                 if name_id == thumbnail_id or name == thumbnail_id:
-                    # Return the persistent thumbnail
+                    # For known faces, use the database image if available
+                    member_id = data.get("member_id")
+                    if member_id and member_id in self.known_face_images:
+                        # Use member image from database
+                        ret, jpeg = cv2.imencode('.jpg', self.known_face_images[member_id])
+                        if ret:
+                            return jpeg.tobytes()
+                    
+                    # Fallback to the persistent thumbnail
                     ret, jpeg = cv2.imencode('.jpg', data["image"])
                     if ret:
                         return jpeg.tobytes()

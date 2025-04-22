@@ -208,12 +208,24 @@ def enroll_face():
         active_camera.known_face_names.append(name)
         active_camera.known_face_ids.append(member_id)
         
+        # Load the saved image back from the database path
+        try:
+            saved_image = cv2.imread(filepath)
+            if saved_image is not None:
+                # Store in the known face images dictionary
+                active_camera.known_face_images[member_id] = saved_image
+        except Exception as img_error:
+            print(f"Error loading saved image: {img_error}")
+            # Fall back to the current face image
+            saved_image = face_image
+        
         # Add to persistent known faces
         active_camera.persistent_faces["known"][name] = {
-            "image": face_image,
+            "image": saved_image if saved_image is not None else face_image,
             "in_view": True,
             "last_seen": time.time(),
-            "member_id": member_id
+            "member_id": member_id,
+            "encoding": face_encoding
         }
         
         # Remove from unknown faces if it was there
@@ -278,6 +290,29 @@ def face_thumbnail(thumbnail_id):
         return response
     
     return "Face thumbnail not found", 404
+
+@bp.route('/member_info/<int:member_id>')
+def member_info(member_id):
+    """Get member information for the welcome card."""
+    from app.database.members import get_member
+    
+    try:
+        member = get_member(member_id)
+        if member:
+            # Return member details
+            return jsonify({
+                "name": member['name'],
+                "major": member['major'],
+                "age": member['age'],
+                "bio": member['bio'],
+                "meeting_count": member['meeting_count'],
+                "image_path": member['image_path']
+            })
+        else:
+            return jsonify({"error": "Member not found"}), 404
+    except Exception as e:
+        print(f"Error getting member info: {e}")
+        return jsonify({"error": f"Failed to get member info: {str(e)}"}), 500
 
 @bp.route('/remove_unknown_face/<face_id>', methods=['POST'])
 def remove_unknown_face(face_id):
