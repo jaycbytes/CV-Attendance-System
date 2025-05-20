@@ -32,8 +32,11 @@ class Camera:
     def initialize_camera(self):
         """Initialize the camera with the best settings for the device."""
         try:
-            # Initialize camera
+            # Initialize camera with more time to connect (especially for USB cameras)
             self.camera = cv2.VideoCapture(self.camera_id)
+            
+            # Give USB cameras a moment to initialize (important for external cameras)
+            time.sleep(0.5)
             
             # Check if camera opened successfully
             if not self.camera.isOpened():

@@ -61,6 +61,9 @@ temp/
 .env.development.local
 .env.test.local
 .env.production.local
+*.pem
+*.key
+*.cert
 
 # Media files (allow these to be included if needed for development, but generally exclude)
 # Member images (commonly uploaded)
@@ -78,6 +81,10 @@ app/static/member_images/*
 *.t7
 *.pkl
 *.pickle
+# Face encodings
+*_encoding*
+*_encodings*
+face_data/
 
 # Jupyter Notebooks
 .ipynb_checkpoints
@@ -112,8 +119,38 @@ docker-compose.override.yml
 # Any API keys or secrets files
 **/secrets/*
 **/credentials/*
+**/config.json
+*api_key*
+*secret_key*
 
 # Profiling data
 profile_output/
 *.prof
 *.lprof
+
+# Backup files
+*.bak
+*~
+*.backup
+*.old
+
+# Test files that might contain personal data
+test_data/
+sample_data/
+*_test.*
+
+# Packaging and distribution
+*.egg
+dist/
+build/
+eggs/
+parts/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Temporary attendance records (if any)
+attendance_export_*.csv
+export_*.csv

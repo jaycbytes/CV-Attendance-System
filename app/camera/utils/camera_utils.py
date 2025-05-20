@@ -27,12 +27,12 @@ def list_available_cameras(max_cameras=8):
             cap = cv2.VideoCapture(i)
             
             # Important: On macOS, a camera can be opened but not provide frames right away
-            # So we'll consider any camera that can be opened as available
+            # We'll consider any camera that can be opened as available, even if it doesn't read a frame
             if cap.isOpened():
                 # Try to read a frame, but don't require success
                 ret, frame = cap.read()
                 
-                # Add the camera if it can be opened, regardless of frame read
+                # Add the camera regardless of frame read success
                 available_cameras.append(i)
                 print(f"Camera {i} is available" + (" (read successful)" if ret else " (no frame read)"))
             else:
@@ -98,6 +98,13 @@ def try_camera_resolutions(camera, resolutions=None):
     
     # If default resolution seems valid, use it
     if default_width > 0 and default_height > 0:
+        # Try to read a frame to validate, but don't require success
+        ret, _ = camera.read()
+        if ret:
+            print(f"Successfully validated default resolution {default_width}x{default_height}")
+        else:
+            print(f"Default resolution seems valid but no frame read yet. Will still use {default_width}x{default_height}")
+        
         return default_width, default_height
     
     # Otherwise try each resolution in the list
@@ -108,17 +115,25 @@ def try_camera_resolutions(camera, resolutions=None):
         camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         
+        # Give camera a moment to adjust
+        time.sleep(0.1)
+        
         # Check if the setting worked
         actual_width = int(camera.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_height = int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
         print(f"Actual resolution: {actual_width}x{actual_height}")
         
-        # Try to read a frame to confirm it works
+        # Try to read a frame, but don't strictly require success
+        # Some USB cameras need more time to initialize
         ret, _ = camera.read()
-        if ret:
-            print(f"Successfully read frame at {actual_width}x{actual_height}")
+        print(f"Frame read {'successful' if ret else 'unsuccessful'} at {actual_width}x{actual_height}")
+        
+        # If we got any dimensions, consider it working
+        if actual_width > 0 and actual_height > 0:
             best_width, best_height = actual_width, actual_height
-            break
+            # If frame read succeeded, that's the best case scenario
+            if ret:
+                break
     
     return best_width, best_height
 
