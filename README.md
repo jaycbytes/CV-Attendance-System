@@ -43,6 +43,7 @@ Access the application at http://127.0.0.1:5000
 
 ## 🔧 Development
 ### Project Structure
+```bash
 Attendance-AI/
 ├── app/                  # Main application package
 │   ├── camera/           # Camera and face recognition
@@ -50,13 +51,13 @@ Attendance-AI/
 │   ├── routes/           # Flask route handlers
 │   ├── static/           # Static assets (CSS, JS, images)
 │   └── templates/        # HTML templates
-├── docs/                 # Documentation
 ├── tests/                # Unit and integration tests
 ├── .gitignore            # Git ignore file
 ├── LICENSE               # License file
 ├── README.md             # Project README
 ├── requirements.txt      # Python dependencies
 └── run.py                # Application entry point
+```
 
 ### Contributing
 This project is mainly for SMC AI Club members who want to contribute to do so. If anybody else is interested please fork the project or make pull requests.
