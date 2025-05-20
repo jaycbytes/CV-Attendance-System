@@ -23,7 +23,7 @@ pip (Python package manager)
 ### Installation
 
 Clone the repository
-bashgit clone https://github.com/yourusername/Attendance-AI.git
+git clone https://github.com/jaycbytes/Attendance-AI.git
 cd Attendance-AI
 
 Set up a virtual environment
@@ -72,8 +72,8 @@ Open a Pull Request
 This project is licensed under the MIT License
 
 💬 Contact
-Your Name - @yourusername - email@example.com
-Project Link: https://github.com/yourusername/Attendance-AI
+Jay Castro - @jabootyismine - castro_jayhangeer01@student.smc.edu
+Project Link: https://github.com/jaycbytes/Attendance-AI
 
 🙏 Acknowledgements
 shout out to Chris and Trent for supporting the idea.
